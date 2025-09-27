@@ -1,0 +1,12 @@
+# This file lists the core dependencies for the project.
+# For actual implementation, libraries like torch, tensorflow, and faiss-cpu would be required.
+
+# For video/image processing
+opencv-python-headless
+
+# For making API calls to LLMs
+google-generativeai
+openai
+
+# A simple library to simulate fetching YouTube captions
+youtube-transcript-api
