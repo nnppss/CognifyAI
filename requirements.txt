@@ -1,0 +1,15 @@
+flask
+jinja2
+
+youtube-transcript-api
+yt-dlp
+webvtt-py
+
+sentence-transformers
+transformers
+torch
+numpy
+tqdm
+rank-bm25
+
+google-genai

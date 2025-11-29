@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Step 1 – Process a YouTube Lecture</h2>
+  <form method="post">
+    <label for="youtube_url">YouTube Lecture URL</label>
+    <input type="url" id="youtube_url" name="youtube_url"
+           placeholder="https://www.youtube.com/watch?v=..." required>
+    <button type="submit">Process lecture</button>
+  </form>
+  <p class="help">
+    The system will fetch captions (if available), build timestamped chunks,
+    create a semantic index, and prepare the lecture for question-answering.
+  </p>
+</section>
+
+<section class="card">
+  <h2>Step 2 – Ask Questions</h2>
+  <p>
+    After processing, you’ll be redirected to the Q&A page.
+    If not, open the Q&A page and fill in the Lecture ID shown in the success message.
+  </p>
+</section>
+{% endblock %}

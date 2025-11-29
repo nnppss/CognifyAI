@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Q&A</h2>
+  <form method="post">
+    <div class="grid">
+      <div>
+        <label for="lecture_id">Lecture ID (YouTube video ID)</label>
+        <input type="text" id="lecture_id" name="lecture_id"
+               value="{{ lecture_id }}" placeholder="e.g., dQw4w9WgXcQ" required>
+      </div>
+      <div>
+        <label for="src_url">Source URL (optional, enables jump link)</label>
+        <input type="url" id="src_url" name="src_url"
+               value="{{ src_url }}" placeholder="https://www.youtube.com/watch?v=...">
+      </div>
+    </div>
+
+    <label for="question">Your question</label>
+    <input type="text" id="question" name="question"
+           value="{{ question }}"
+           placeholder="Where does the professor explain cognitive load?" required>
+
+    <label for="top_k">Number of supporting segments (1–5)</label>
+    <select id="top_k" name="top_k">
+      {% for k in [1, 2, 3, 4, 5] %}
+        <option value="{{ k }}" {% if k == 5 %}selected{% endif %}>{{ k }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">Get Answer</button>
+  </form>
+
+  {% if not has_chunks and lecture_id %}
+    <p class="warn">
+      No processed chunks found for this lecture.
+      Go back to the home page and process the YouTube URL first.
+    </p>
+  {% endif %}
+</section>
+
+{% if answer %}
+<section class="card">
+  <h3>Answer {% if mode %}<span class="tag">{{ mode }}</span>{% endif %}</h3>
+  <p>{{ answer }}</p>
+  {% if timestamp is not none %}
+    <p>
+      <strong>Approx. timestamp:</strong> {{ timestamp }} s
+      {% if yt_link %}
+        | <a href="{{ yt_link }}" target="_blank">Open on YouTube ↗</a>
+      {% endif %}
+    </p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h3>Supporting segments</h3>
+  {% for seg in segments %}
+    <details>
+      <summary>
+        Rank {{ seg.rank }} — {{ seg.start|round(1) }}s to {{ seg.end|round(1) }}s
+        (hybrid score = {{ '%.3f'|format(seg.hybrid) }})
+      </summary>
+      <p>{{ seg.text }}</p>
+    </details>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
