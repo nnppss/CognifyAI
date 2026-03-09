@@ -2,16 +2,14 @@ import re
 from typing import Dict, List, Tuple
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from config import (
-    EMBEDDING_MODEL_NAME,
     HYBRID_ALPHA,
     RETRIEVAL_CANDIDATES,
     RETRIEVAL_TOPK,
     NEIGHBOR_WINDOW,
 )
-from indexing import load_index_and_segments
+from indexing import get_embedder, load_index_and_segments
 from llm_client import call_llm
 
 # Optional lexical scorer
@@ -44,7 +42,7 @@ class LectureQA:
 
     - loads embeddings and transcript segments
     - hybrid retrieval: cosine (semantic) + BM25 (lexical)
-    - builds a rich prompt and calls Gemini through llm_client.call_llm()
+    - builds a rich prompt and calls the configured LLM through llm_client.call_llm()
     """
 
     def __init__(self, lecture_id: str):
@@ -56,9 +54,9 @@ class LectureQA:
         norms = np.linalg.norm(self.emb, axis=1, keepdims=True) + 1e-10
         self.emb = self.emb / norms
 
-        self.embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        self.embedder = get_embedder()
 
-        if _HAS_BM25:
+        if _HAS_BM25 and BM25Okapi is not None:
             corpus_tokens = [_tok(s["text"]) for s in self.segments]
             self.bm25 = BM25Okapi(corpus_tokens)
         else:
@@ -144,13 +142,14 @@ class LectureQA:
             lines.append(f"[{idx}] {s['start']:.1f}–{s['end']:.1f}s :: {s['text']}")
         return "\n".join(lines)
 
-    def _build_prompts(self, question: str, support_segs: List[Dict]) -> (str, str):
+    def _build_prompts(self, question: str, support_segs: List[Dict]) -> tuple[str, str]:
         context = self._build_context_block(support_segs)
 
         system_prompt = (
             "You are an expert teaching assistant for B.Tech students. "
             "You help explain material from a lecture video. "
-            "You are given relevant transcript segments with timestamps. "
+            "You are given relevant lecture segments with timestamps. "
+            "Some segments may start with [Visual], which means OCR text read from slides/video frames. "
             "Use those segments as the PRIMARY source of truth. "
             "You may also use your own knowledge of the subject to clarify concepts, "
             "give examples, and connect ideas, but do not contradict the transcript."
@@ -158,15 +157,16 @@ class LectureQA:
 
         user_prompt = (
             f"Student question:\n{question}\n\n"
-            f"Relevant transcript segments from the lecture:\n"
+            f"Relevant lecture segments (speech + visual OCR):\n"
             f"{context}\n\n"
             "Instructions:\n"
-            "- First, answer the question clearly in your own words.\n"
-            "- Base your explanation primarily on the transcript text above.\n"
-            "- You MAY add extra details from your general knowledge, but if you go beyond the video, "
-            "make sure it is standard textbook knowledge.\n"
-            "- Use simple language and, if helpful, bullet points.\n"
-            "- At the end, add a short line: 'Recommended segments to rewatch: [list the segment numbers]'."
+            "- Answer clearly and directly in your own words.\n"
+            "- Base the explanation primarily on the lecture segments above (speech + visual OCR).\n"
+            "- Respond in the same language as the student's question unless asked otherwise.\n"
+            "- You may add brief textbook-standard clarifications when useful.\n"
+            "- Use clear markdown headings/bullets and bold key terms/formulas.\n"
+            "- End with a short 'Key Takeaways' subsection with 3-5 bullets.\n"
+            "- Do not add a 'Recommended segments to rewatch' line."
         )
 
         return system_prompt, user_prompt
@@ -191,12 +191,23 @@ class LectureQA:
 
         try:
             system_prompt, user_prompt = self._build_prompts(question, windowed)
-            answer_text = call_llm(system_prompt, user_prompt).strip()
+            answer_text = call_llm(
+                system_prompt,
+                user_prompt,
+                max_output_tokens=2048,
+                temperature=0.2,
+                task_type="qa",
+            ).strip()
+            answer_text = re.sub(
+                r"(?is)\n*recommended segments to rewatch\s*:.*$",
+                "",
+                answer_text,
+            ).strip()
             mode = "gemini-rag"
         except Exception as e:
             # fallback: show best transcript chunk only
             answer_text = (
-                f"(Gemini error: {e})\n\n"
+                f"(LLM error: {e})\n\n"
                 f"Best matching transcript snippet:\n\n{windowed[0]['text']}"
             )
             mode = "retrieval-only"
