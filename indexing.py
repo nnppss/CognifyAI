@@ -1,12 +1,21 @@
 import json
 import os
-from typing import Tuple, List
+from typing import List, Optional, Tuple
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from tqdm import tqdm
 
 from config import TRANSCRIPT_DIR, INDEX_DIR, EMBEDDING_MODEL_NAME
+
+
+_embedder: Optional[SentenceTransformer] = None
+
+
+def get_embedder() -> SentenceTransformer:
+    global _embedder
+    if _embedder is None:
+        _embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    return _embedder
 
 
 def build_index(lecture_id: str) -> Tuple[str, str]:
@@ -27,7 +36,7 @@ def build_index(lecture_id: str) -> Tuple[str, str]:
 
     texts: List[str] = [s["text"] for s in segments]
 
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    model = get_embedder()
 
     print("Encoding chunks...")
     emb = model.encode(
