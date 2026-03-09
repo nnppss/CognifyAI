@@ -1,24 +1,196 @@
-{% extends "base.html" %}
-{% block content %}
-<section class="card">
-  <h2>Step 1 – Process a YouTube Lecture</h2>
-  <form method="post">
-    <label for="youtube_url">YouTube Lecture URL</label>
-    <input type="url" id="youtube_url" name="youtube_url"
-           placeholder="https://www.youtube.com/watch?v=..." required>
-    <button type="submit">Process lecture</button>
-  </form>
-  <p class="help">
-    The system will fetch captions (if available), build timestamped chunks,
-    create a semantic index, and prepare the lecture for question-answering.
-  </p>
-</section>
+<!doctype html>
+<html lang="en">
 
-<section class="card">
-  <h2>Step 2 – Ask Questions</h2>
-  <p>
-    After processing, you’ll be redirected to the Q&A page.
-    If not, open the Q&A page and fill in the Lecture ID shown in the success message.
-  </p>
-</section>
-{% endblock %}
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CognifyAI</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg.mp4') }}">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg-rev.mp4') }}">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+
+<body class="landing">
+  <div id="pageTransition" class="page-transition active" aria-hidden="true"></div>
+  <noscript>
+    <style>
+      #pageTransition {
+        display: none;
+      }
+    </style>
+  </noscript>
+
+  <video id="bgVideoA" class="bg-video is-active" muted playsinline webkit-playsinline preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"></video>
+
+  <video id="bgVideoB" class="bg-video" muted playsinline webkit-playsinline preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"></video>
+
+  <div class="bg-overlay"></div>
+
+  <main class="landing-wrap">
+    <h1 class="brand-title">CognifyAI</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-stack">
+      {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div id="modeToggle" class="mode-toggle" role="tablist" aria-label="Input source mode">
+      <span class="mode-highlight" aria-hidden="true"></span>
+      <button class="mode-btn active" type="button" data-mode="youtube">YouTube URL</button>
+      <button class="mode-btn" type="button" data-mode="upload">Upload Video</button>
+    </div>
+
+    <form id="introForm" class="chatbox" method="POST" action="/" enctype="multipart/form-data">
+      <input type="hidden" id="sourceType" name="source_type" value="youtube">
+
+      <div class="input-stack">
+        <div id="youtubePane" class="input-pane active">
+          <textarea id="youtubeInput" class="chat-input" name="youtube_url" placeholder="Drop your youtube link here"
+            rows="1" autocapitalize="none" autocomplete="off" spellcheck="false" inputmode="url"></textarea>
+        </div>
+
+        <div id="uploadPane" class="input-pane">
+          <label class="upload-dropzone" for="videoFile">
+            <span class="upload-title">Drop or choose a video file</span>
+            <span class="upload-meta">MP4, MKV, AVI, MOV up to 500 MB</span>
+            <span class="upload-file-row">
+              <span class="upload-choose-btn">Choose file</span>
+              <span id="uploadFileName" class="upload-file-name">No file selected yet.</span>
+            </span>
+            <input id="videoFile" type="file" name="video_file" accept=".mp4,.mkv,.avi,.mov,video/*">
+          </label>
+        </div>
+      </div>
+
+      <button id="sendBtn" class="send-btn" type="submit" aria-label="Send">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12h13"></path>
+          <path d="M12 5l7 7-7 7"></path>
+        </svg>
+      </button>
+
+      <div class="submit-spinner" aria-hidden="true">
+        <div class="ring-spinner" aria-hidden="true"></div>
+      </div>
+    </form>
+
+    <p id="hintText" class="hint">Paste a YouTube lecture link and press Enter</p>
+  </main>
+
+  <script src="{{ url_for('static', filename='bg-boomerang.js') }}"></script>
+
+  <script>
+    const overlay = document.getElementById('pageTransition');
+    window.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => overlay && overlay.classList.remove('active'));
+    }, { once: true });
+
+    setupBoomerangBackground('bgVideoA', 'bgVideoB');
+
+    const form = document.getElementById('introForm');
+    const ta = document.getElementById('youtubeInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const modeToggle = document.getElementById('modeToggle');
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    const sourceType = document.getElementById('sourceType');
+    const youtubePane = document.getElementById('youtubePane');
+    const uploadPane = document.getElementById('uploadPane');
+    const videoFile = document.getElementById('videoFile');
+    const uploadFileName = document.getElementById('uploadFileName');
+    const hintText = document.getElementById('hintText');
+
+    const autoResize = () => {
+      ta.style.height = '0px';
+      ta.style.height = Math.min(160, ta.scrollHeight) + 'px';
+    };
+
+    const positionModeHighlight = (mode) => {
+      const activeBtn = Array.from(modeBtns).find((btn) => btn.dataset.mode === mode);
+      if (!activeBtn || !modeToggle) return;
+      modeToggle.style.setProperty('--highlight-x', `${activeBtn.offsetLeft}px`);
+      modeToggle.style.setProperty('--highlight-w', `${activeBtn.offsetWidth}px`);
+    };
+
+    const setMode = (mode) => {
+      sourceType.value = mode;
+      modeBtns.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
+      youtubePane.classList.toggle('active', mode === 'youtube');
+      uploadPane.classList.toggle('active', mode === 'upload');
+      positionModeHighlight(mode);
+      if (mode === 'youtube') {
+        ta.focus();
+        hintText.textContent = 'Paste a YouTube lecture link and press Enter';
+      } else {
+        hintText.textContent = 'Upload an offline lecture video.';
+      }
+    };
+
+    modeBtns.forEach((btn) => {
+      btn.addEventListener('click', () => setMode(btn.dataset.mode));
+    });
+
+    window.addEventListener('resize', () => positionModeHighlight(sourceType.value));
+    requestAnimationFrame(() => positionModeHighlight(sourceType.value));
+
+    if (ta) {
+      ta.focus();
+      ta.addEventListener('input', autoResize);
+      autoResize();
+      ta.addEventListener('keydown', (e) => {
+        if (sourceType.value !== 'youtube') return;
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      });
+    }
+
+    videoFile?.addEventListener('change', () => {
+      const file = videoFile.files && videoFile.files[0];
+      uploadFileName.textContent = file ? file.name : 'No file selected yet.';
+    });
+
+    let submitted = false;
+    form?.addEventListener('submit', (e) => {
+      if (submitted) return;
+
+      if (sourceType.value === 'youtube' && !(ta.value || '').trim()) {
+        e.preventDefault();
+        return;
+      }
+      if (sourceType.value === 'upload' && !(videoFile.files && videoFile.files.length)) {
+        e.preventDefault();
+        return;
+      }
+
+      submitted = true;
+      e.preventDefault();
+
+      form.classList.add('is-loading');
+      if (ta) ta.setAttribute('readonly', 'readonly');
+      if (sendBtn) sendBtn.disabled = true;
+      if (overlay) overlay.classList.add('active');
+
+      setTimeout(() => form.submit(), 240);
+    });
+  </script>
+</body>
+
+</html>
