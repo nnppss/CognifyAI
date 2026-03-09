@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CognifyAI • Quiz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg.mp4') }}">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg-rev.mp4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+<body class="landing qa docs quiz-page">
+  <div id="pageTransition" class="page-transition active" aria-hidden="true"></div>
+  <noscript><style>#pageTransition{display:none;}</style></noscript>
+
+  <video
+    id="bgVideoA"
+    class="bg-video is-active"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <video
+    id="bgVideoB"
+    class="bg-video"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <div class="bg-overlay"></div>
+
+  <main class="chat-shell notes-shell docs-shell quiz-shell">
+    <header class="chat-header">
+      <div class="chat-title">Exam-Ready Quiz</div>
+      <div class="chat-meta">
+        <a class="pill" href="{{ url_for('qa', lecture_id=lecture_id, src_url=lecture_meta.get('source_url', '')) }}">Q&A</a>
+        <a class="pill" href="{{ url_for('summary_view', lecture_id=lecture_id) }}">Summary</a>
+        <a class="pill" href="{{ url_for('notes_view', lecture_id=lecture_id) }}">Notes</a>
+        <a class="pill" href="{{ url_for('index') }}">Change lecture</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="quiz-overview">
+      <div class="quiz-overview-copy">
+        <p class="doc-kicker">Practice mode</p>
+        <h2 class="doc-heading">Assess your understanding</h2>
+        <p class="doc-intro">Answer each question, submit for instant feedback, then regenerate for a fresh set.</p>
+      </div>
+
+      {% if total_score is not none %}
+        <div class="quiz-scoreboard" aria-live="polite">
+          <div class="quiz-score-value">{{ total_score }}%</div>
+          <div class="quiz-score-track">
+            <span class="quiz-score-fill" style="width: {{ total_score|float }}%;"></span>
+          </div>
+        </div>
+      {% else %}
+        <span class="pill pill-muted">Questions: {{ questions|length }}</span>
+      {% endif %}
+    </section>
+
+    {% if questions %}
+      <form method="POST" action="{{ url_for('quiz_view') }}" class="quiz-form">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="action" value="submit">
+
+        {% for q in questions %}
+          {% set q_index = loop.index %}
+          {% set answer_key = 'q_' ~ q_index %}
+          {% set previous_answer = request.form.get(answer_key, '') if request.method == 'POST' else '' %}
+          {% set previous_answers = request.form.getlist(answer_key) if request.method == 'POST' else [] %}
+
+          <section class="quiz-card">
+            <div class="quiz-card-top">
+              <span class="quiz-qno">Q{{ q_index }}</span>
+              <span class="quiz-type">
+                {% if q.type == 'multi_select' %}
+                  Multiple Correct
+                {% else %}
+                  {{ q.type|replace('_', ' ')|title }}
+                {% endif %}
+              </span>
+            </div>
+            <h3>{{ q.question }}</h3>
+
+            {% if q.type in ['mcq', 'multi_select'] %}
+              {% set is_multi = q.type == 'multi_select' %}
+              {% for option in q.options %}
+                <label class="quiz-option {% if is_multi %}is-multi{% endif %}">
+                  <input
+                    type="{{ 'checkbox' if is_multi else 'radio' }}"
+                    name="{{ answer_key }}"
+                    value="{{ option }}"
+                    {% if is_multi and option in previous_answers %}checked{% endif %}
+                    {% if (not is_multi) and previous_answer == option %}checked{% endif %}
+                  >
+                  <span>{{ option }}</span>
+                </label>
+              {% endfor %}
+            {% elif q.type == 'true_false' %}
+              <label class="quiz-option">
+                <input type="radio" name="{{ answer_key }}" value="True" {% if previous_answer == 'True' %}checked{% endif %}>
+                <span>True</span>
+              </label>
+              <label class="quiz-option">
+                <input type="radio" name="{{ answer_key }}" value="False" {% if previous_answer == 'False' %}checked{% endif %}>
+                <span>False</span>
+              </label>
+            {% else %}
+              <textarea class="quiz-text" name="{{ answer_key }}" rows="3" placeholder="Write your answer">{{ previous_answer }}</textarea>
+            {% endif %}
+
+            {% if results %}
+              {% set r = results[loop.index0] %}
+              <div class="quiz-result {% if r.score >= 0.99 %}is-correct{% elif r.score <= 0.01 %}is-wrong{% else %}is-partial{% endif %}">
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Selected</span>
+                  <span class="quiz-result-value">{{ r.user_answer or 'No answer' }}</span>
+                </div>
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Correct answer</span>
+                  <span class="quiz-result-value">{{ r.correct }}</span>
+                </div>
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Assessment</span>
+                  <span class="quiz-result-value">{{ r.assessment }} • {{ (r.score * 100)|round(1) }}%</span>
+                </div>
+                {% if r.feedback %}
+                  <div class="quiz-result-row">
+                    <span class="quiz-result-label">Details</span>
+                    <span class="quiz-result-value">{{ r.feedback }}</span>
+                  </div>
+                {% endif %}
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Why</span>
+                  <span class="quiz-result-value">{{ r.explanation }}</span>
+                </div>
+              </div>
+            {% endif %}
+          </section>
+        {% endfor %}
+
+        <div class="quiz-actions">
+          <button class="pill pill-primary" type="submit">Submit Quiz</button>
+        </div>
+      </form>
+
+      <form method="POST" action="{{ url_for('quiz_view') }}" class="quiz-actions-inline">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="action" value="regenerate">
+        <button class="pill" type="submit">Regenerate Quiz</button>
+      </form>
+    {% else %}
+      <section class="chat-empty">No questions generated yet. Try regenerating to create a new quiz.</section>
+      <form method="POST" action="{{ url_for('quiz_view') }}" class="quiz-actions-inline">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="action" value="regenerate">
+        <button class="pill" type="submit">Generate Quiz</button>
+      </form>
+    {% endif %}
+  </main>
+
+  <script src="{{ url_for('static', filename='bg-boomerang.js') }}"></script>
+  <script>
+    const overlay = document.getElementById('pageTransition');
+    window.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => overlay && overlay.classList.remove('active'));
+    }, { once: true });
+
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a');
+      if (!a || a.target === '_blank') return;
+
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+
+      e.preventDefault();
+      overlay && overlay.classList.add('active');
+      setTimeout(() => { window.location.href = url.href; }, 200);
+    });
+
+    document.querySelectorAll('form').forEach((form) => {
+      form.addEventListener('submit', () => {
+        overlay && overlay.classList.add('active');
+      });
+    });
+
+    setupBoomerangBackground('bgVideoA', 'bgVideoB');
+  </script>
+</body>
+</html>
