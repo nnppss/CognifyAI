@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CognifyAI • {{ title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg.mp4') }}">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg-rev.mp4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+<body class="landing qa docs">
+  <div id="pageTransition" class="page-transition active" aria-hidden="true"></div>
+  <noscript><style>#pageTransition{display:none;}</style></noscript>
+
+  <video
+    id="bgVideoA"
+    class="bg-video is-active"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <video
+    id="bgVideoB"
+    class="bg-video"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <div class="bg-overlay"></div>
+
+  <main class="chat-shell notes-shell docs-shell">
+    <header class="chat-header">
+      <div class="chat-title">{{ title }}</div>
+      <div class="chat-meta">
+        {% if mode != 'summary' %}
+          <a class="pill" href="{{ url_for('summary_view', lecture_id=lecture_id) }}">Summary</a>
+        {% endif %}
+        {% if mode != 'notes' %}
+          <a class="pill" href="{{ url_for('notes_view', lecture_id=lecture_id) }}">Notes</a>
+        {% endif %}
+        <a class="pill" href="{{ url_for('qa', lecture_id=lecture_id, src_url=lecture_meta.get('source_url', '')) }}">Q&A</a>
+        <a class="pill" href="{{ url_for('quiz_view', lecture_id=lecture_id) }}">Quiz</a>
+        <a class="pill" href="{{ url_for('index') }}">Change lecture</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% set transcript_source = lecture_meta.get('transcript_source', '') if lecture_meta else '' %}
+    {% set detected_language = lecture_meta.get('detected_language', '') if lecture_meta else '' %}
+    {% set ocr_segment_count = lecture_meta.get('ocr_segment_count', 0) if lecture_meta else 0 %}
+    {% set ocr_error = lecture_meta.get('ocr_error', '') if lecture_meta else '' %}
+
+    <section class="doc-toolbar">
+      <div class="doc-title-group">
+        <p class="doc-kicker">{% if mode == 'summary' %}Quick revision view{% else %}Deep study view{% endif %}</p>
+        <h2 class="doc-heading">{{ title }}</h2>
+        <p class="doc-intro">
+          {% if mode == 'summary' %}
+            Condensed lecture takeaways for fast revision and recap.
+          {% else %}
+            Structured notes focused on definitions, insights, and exam prep.
+          {% endif %}
+        </p>
+      </div>
+      <div class="doc-actions">
+        <a class="pill pill-primary" href="{{ url_for('download_doc', doc_type=mode, lecture_id=lecture_id) }}">Download PDF</a>
+      </div>
+    </section>
+
+    <section class="doc-meta-row" aria-label="Document metadata">
+      {% if lecture_meta and lecture_meta.get('source_label') %}
+        <span class="pill pill-muted">Source: {{ lecture_meta.get('source_label') }}</span>
+      {% endif %}
+      {% if transcript_source %}
+        <span class="pill pill-muted">Transcript: {{ transcript_source|replace('-', ' ')|replace('+', ' + ') }}</span>
+      {% endif %}
+      {% if detected_language %}
+        <span class="pill pill-muted">Language: {{ detected_language }}</span>
+      {% endif %}
+      <span class="pill {% if ocr_segment_count|int > 0 %}pill-success{% else %}pill-muted{% endif %}">OCR segments: {{ ocr_segment_count|int }}</span>
+      {% if ocr_error %}
+        <span class="pill pill-warn">{{ ocr_error }}</span>
+      {% endif %}
+    </section>
+
+    <section class="doc-view">
+      <article id="docContent" class="doc-rich"></article>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='bg-boomerang.js') }}"></script>
+  <script>
+    const overlay = document.getElementById('pageTransition');
+    const docContent = document.getElementById('docContent');
+    const rawDoc = {{ ((content or "")|tojson) }};
+
+    function escapeHtml(text){
+      return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatInline(text){
+      return escapeHtml(text)
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    }
+
+    function renderRichText(raw){
+      const lines = String(raw || "").replace(/\r/g, "").split("\n");
+      const html = [];
+      let inUl = false;
+      let inOl = false;
+
+      const closeLists = () => {
+        if (inUl) {
+          html.push("</ul>");
+          inUl = false;
+        }
+        if (inOl) {
+          html.push("</ol>");
+          inOl = false;
+        }
+      };
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          closeLists();
+          continue;
+        }
+
+        const heading = line.match(/^(#{1,4})\s+(.*)$/);
+        if (heading) {
+          closeLists();
+          const level = Math.min(4, heading[1].length);
+          html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+          continue;
+        }
+
+        const ordered = line.match(/^\d+[.)]\s+(.*)$/);
+        if (ordered) {
+          if (!inOl) {
+            closeLists();
+            html.push("<ol>");
+            inOl = true;
+          }
+          html.push(`<li>${formatInline(ordered[1])}</li>`);
+          continue;
+        }
+
+        const bullet = line.match(/^[-*]\s+(.*)$/);
+        if (bullet) {
+          if (!inUl) {
+            closeLists();
+            html.push("<ul>");
+            inUl = true;
+          }
+          html.push(`<li>${formatInline(bullet[1])}</li>`);
+          continue;
+        }
+
+        const quote = line.match(/^>\s?(.*)$/);
+        if (quote) {
+          closeLists();
+          html.push(`<blockquote>${formatInline(quote[1])}</blockquote>`);
+          continue;
+        }
+
+        closeLists();
+        html.push(`<p>${formatInline(line)}</p>`);
+      }
+
+      closeLists();
+      return html.join("");
+    }
+
+    if (docContent) {
+      docContent.innerHTML = renderRichText(rawDoc);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(() => overlay && overlay.classList.remove('active'));
+    }, { once: true });
+
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a');
+      if (!a || a.target === '_blank') return;
+
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+
+      e.preventDefault();
+      overlay && overlay.classList.add('active');
+      setTimeout(() => { window.location.href = url.href; }, 200);
+    });
+
+    setupBoomerangBackground('bgVideoA', 'bgVideoB');
+  </script>
+</body>
+</html>
