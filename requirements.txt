@@ -1,9 +1,12 @@
 flask
 jinja2
 
-youtube-transcript-api
 yt-dlp
-webvtt-py
+youtube-transcript-api
+speechmatics-python
+reportlab
+pytesseract
+Pillow
 
 sentence-transformers
 transformers
