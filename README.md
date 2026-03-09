@@ -14,7 +14,22 @@ This code provides a structural overview and simulation of the project's workflo
     ```bash
     pip install -r requirements.txt
     ```
-2.  Run the main simulation script:
+2.  Set required API keys:
     ```bash
-    python main.py
+    export GEMINI_API_KEY="your_gemini_api_key"
+    export SPEECHMATICS_API_KEY="your_speechmatics_api_key"
     ```
+    Or create a local `.env` file in the project root:
+    ```env
+    GEMINI_API_KEY=your_gemini_api_key
+    SPEECHMATICS_API_KEY=your_speechmatics_api_key
+    ```
+    Optional: override the default Gemini model:
+    ```env
+    GEMINI_MODEL_NAME=gemini-2.5-flash
+    ```
+3.  Run the web app:
+    ```bash
+    python3 server.py
+    ```
+4.  Open `http://127.0.0.1:8000` in your browser.
