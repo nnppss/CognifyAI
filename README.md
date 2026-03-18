@@ -1,15 +1,44 @@
 # CognifyAI
 
-CognifyAI turns a lecture video into a study workspace. It combines transcript text, on-screen text pulled from video frames, and AI-generated study tools so you can ask questions, review faster, and revisit key concepts.
+Turn lecture videos into a searchable AI study workspace.
 
-## What It Does
+`Flask` `Gemini` `RAG` `OCR` `YouTube` `Local Video`
+
+
+
+## What It Is
+
+CognifyAI processes a lecture video and turns it into a study workspace. It combines transcript text, on-screen text extracted from video frames, and AI-generated study tools so you can ask questions, review faster, and revisit key concepts later.
+
+## Highlights
 
 - Process a YouTube lecture or a local video upload
-- Build a searchable lecture context from transcript + OCR text
-- Let you ask questions about the lecture
+- Combine spoken transcript text and visual OCR text into one searchable lecture context
+- Ask lecture-specific questions with timestamp-aware answers
 - Generate summaries, detailed notes, flashcards, and quizzes
 - Download summaries and notes as PDF files
-- Save processed lectures in a local library dashboard for later review
+- Save processed lectures locally in a library dashboard for later review
+
+## Tech Stack
+
+| Layer | Tools | Purpose |
+| --- | --- | --- |
+| Backend | Flask, Jinja2 | Web app routes, templates, and server logic |
+| LLM | Google Gemini | Answers, summaries, notes, quizzes, and flashcards |
+| Retrieval | Sentence Transformers, Rank-BM25, NumPy | Embeddings, hybrid search, and ranking |
+| Transcript + Media | yt-dlp, youtube-transcript-api, Speechmatics, FFmpeg | Video input, transcript fetching, fallback transcription, audio/frame extraction |
+| OCR | Tesseract, pytesseract, Pillow | Extract on-screen text from sampled lecture frames |
+| Output + Storage | ReportLab, local JSON/NPY/PDF files in `data/` | PDF export and local persistence |
+
+## Workflow
+
+1. Add a lecture using a YouTube URL or a local video upload.
+2. Fetch the transcript from YouTube, or fall back to Speechmatics transcription when needed.
+3. Sample video frames with FFmpeg and extract on-screen text with Tesseract OCR.
+4. Merge transcript text and OCR text into lecture chunks, then build searchable indexes and embeddings.
+5. Retrieve the most relevant chunks with hybrid search and use Gemini to answer questions.
+6. Generate summaries, notes, flashcards, quizzes, and PDFs from the processed lecture.
+7. Save everything locally so the lecture can be reopened from the library dashboard.
 
 ## Installation
 
@@ -120,10 +149,18 @@ Open `http://127.0.0.1:8000` in your browser.
    - create flashcards
    - generate a quiz
 5. Reopen saved lectures from the Library Dashboard.
+6. Download summary or notes as PDF when needed.
 
 ## Notes
 
 - Local uploads support `mp4`, `mkv`, `avi`, and `mov`
 - Maximum upload size is `500 MB`
 - Generated files and study data are stored locally in `data/`
-- If YouTube download fails with a format/runtime error, install `Node.js` or `Deno` and try again
+- No separate database setup is required
+
+## Troubleshooting
+
+- If `ffmpeg` or `tesseract` is not found, reinstall it and open a new terminal window
+- If `winget` is unavailable on Windows, install FFmpeg and Tesseract manually and add them to `PATH`
+- If YouTube download fails with a format or runtime error, install `Node.js` or `Deno` and try again
+- If the app says an API key is missing, check the `.env` file and restart the server
