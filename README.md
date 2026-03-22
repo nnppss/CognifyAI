@@ -1,4 +1,4 @@
-<div align="center">
+
 
 # CognifyAI
 
@@ -6,7 +6,7 @@ Turn lecture videos into a searchable AI study workspace.
 
 `Flask` `Gemini` `RAG` `OCR` `YouTube` `Local Video`
 
-</div>
+
 
 ## What It Is
 
