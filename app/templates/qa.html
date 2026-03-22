@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CognifyAI • QA</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Preload both videos -->
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg.mp4') }}">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg-rev.mp4') }}">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+
+<body class="landing qa qa-chat">
+  <!-- Page transition overlay -->
+  <div id="pageTransition" class="page-transition active" data-default-label="Opening Q&amp;A...">
+    <div class="page-transition-content" role="status" aria-live="polite">
+      <p id="pageTransitionLabel" class="page-transition-label page-transition-shimmer">Opening Q&amp;A...</p>
+    </div>
+  </div>
+  <noscript><style>#pageTransition{display:none;}</style></noscript>
+
+  <!-- Background video (boomerang + crossfade) -->
+  <video
+    id="bgVideoA"
+    class="bg-video is-active"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <video
+    id="bgVideoB"
+    class="bg-video"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <div class="bg-overlay"></div>
+
+  <main class="chat-shell">
+    <header class="chat-header">
+      <div class="chat-title">CognifyAI</div>
+
+      <div class="chat-meta">
+        {% if lecture_id %}
+          <a class="pill" href="{{ url_for('library.dashboard') }}" data-transition-label="Opening library...">Library</a>
+          <a class="pill" href="{{ url_for('flashcards.flashcards_view', lecture_id=lecture_id) }}" data-transition-label="Opening flashcards...">Flashcards</a>
+          <a class="pill" href="{{ url_for('study.summary_view', lecture_id=lecture_id) }}" data-transition-label="Generating summary...">Summary</a>
+          <a class="pill" href="{{ url_for('study.notes_view', lecture_id=lecture_id) }}" data-transition-label="Generating notes...">Notes</a>
+          <a class="pill" href="{{ url_for('quiz.quiz_view', lecture_id=lecture_id) }}" data-transition-label="Generating quiz...">Quiz</a>
+        {% endif %}
+        <a class="pill" href="{{ url_for('lectures.index') }}" data-transition-label="Opening lectures...">Change lecture</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="chat-main">
+      <div class="chat-content">
+        <div id="chatScroll" class="chat-scroll">
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-empty">
+              Your conversation will appear here.
+            </div>
+          </div>
+        </div>
+        <button id="scrollBottomBtn" class="scroll-bottom-btn" type="button" aria-label="Scroll to latest message">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M6 13l6 6 6-6"></path>
+          </svg>
+        </button>
+      </div>
+
+      <aside class="chat-rail" aria-label="Chat controls">
+        <button class="rail-btn" type="button" id="topKBtn">Top {{ (top_k|default(3)|int) }}</button>
+        <button class="rail-btn" type="button" id="clearChatBtn">Clear chat</button>
+      </aside>
+    </div>
+
+    <div class="composer-bar">
+      <form id="qaForm" class="chatbox composer" method="POST" action="{{ url_for('qa.qa_view') }}">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="src_url" value="{{ src_url }}">
+        <input type="hidden" id="topKInput" name="top_k" value="{{ (top_k|default(3)|int) }}">
+
+        <textarea
+          id="qaInput"
+          class="chat-input"
+          name="question"
+          placeholder="Ask a question about this lecture..."
+          rows="1"
+          required
+          autocomplete="off"
+          spellcheck="false"
+        ></textarea>
+
+        <button id="qaSendBtn" class="send-btn" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h13"></path>
+            <path d="M12 5l7 7-7 7"></path>
+          </svg>
+          <span class="btn-spinner" aria-hidden="true"></span>
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <!-- Boomerang crossfade controller -->
+  <script src="{{ url_for('static', filename='bg-boomerang.js') }}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+
+  <script>
+    // Fade overlay out ASAP
+    const overlay = document.getElementById('pageTransition');
+    const overlayLabel = document.getElementById('pageTransitionLabel');
+
+    function setOverlayLabel(label){
+      if (!overlayLabel) return;
+      overlayLabel.textContent = label || overlay?.dataset.defaultLabel || 'Loading...';
+    }
+
+    function transitionLabelForUrl(url){
+      const path = String(url?.pathname || '').replace(/\/+$/, '');
+      if (path.endsWith('/summary')) return 'Generating summary...';
+      if (path.endsWith('/notes')) return 'Generating notes...';
+      if (path.endsWith('/quiz')) return 'Generating quiz...';
+      if (path.endsWith('/qa')) return 'Opening Q&A...';
+      return overlay?.dataset.defaultLabel || 'Loading...';
+    }
+
+    function activateOverlay(label){
+      setOverlayLabel(label);
+      overlay && overlay.classList.add('active');
+    }
+
+    let transitionLocked = false;
+
+    function afterTransitionPaint(callback){
+      requestAnimationFrame(() => requestAnimationFrame(callback));
+    }
+
+    function navigateWithOverlay(url, label){
+      if (transitionLocked) return;
+      transitionLocked = true;
+      document.documentElement.classList.add('page-slide-out');
+      activateOverlay(label);
+      afterTransitionPaint(() => {
+        window.location.href = url.href;
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setOverlayLabel(overlay?.dataset.defaultLabel || 'Loading...');
+      afterTransitionPaint(() => overlay && overlay.classList.remove('active'));
+    }, { once: true });
+
+    // Smooth transition when navigating away via same-origin links
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a');
+      if (!a) return;
+      if (a.target === '_blank') return;
+
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+
+      e.preventDefault();
+      navigateWithOverlay(url, a.dataset.transitionLabel || transitionLabelForUrl(url));
+    });
+
+    // Boomerang + crossfade background
+    setupBoomerangBackground('bgVideoA', 'bgVideoB');
+
+    // Payload from server (used to append latest turn after reload)
+    const payload = {
+      lectureId: {{ ((lecture_id or "")|tojson) }},
+      srcUrl: {{ ((src_url or "")|tojson) }},
+      question: {{ ((question or "")|tojson) }},
+      answer: {{ ((answer or "")|tojson) }},
+      mode: {{ ((mode or "")|tojson) }},
+      timestamp: {{ (timestamp if timestamp is not none else None)|tojson }},
+      segments: {{ ((segments or [])|tojson) }},
+    };
+
+    const chatScroll = document.getElementById('chatScroll');
+    const chatMessages = document.getElementById('chatMessages');
+    const clearBtn = document.getElementById('clearChatBtn');
+    const topKBtn = document.getElementById('topKBtn');
+    const topKInput = document.getElementById('topKInput');
+    const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+
+    let topKValue = Number(topKInput?.value || 3);
+    if (!Number.isFinite(topKValue)) topKValue = 3;
+    topKValue = Math.min(5, Math.max(1, Math.round(topKValue)));
+
+    const syncTopK = () => {
+      if (topKInput) topKInput.value = String(topKValue);
+      if (topKBtn) topKBtn.textContent = `Top ${topKValue}`;
+    };
+
+    syncTopK();
+    topKBtn?.addEventListener('click', () => {
+      topKValue = topKValue >= 5 ? 1 : topKValue + 1;
+      syncTopK();
+    });
+
+    const storageKey = `cognify_chat_${payload.lectureId || 'default'}`;
+
+    function loadHistory(){
+      try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); }
+      catch { return []; }
+    }
+
+    function saveHistory(hist){
+      localStorage.setItem(storageKey, JSON.stringify(hist));
+    }
+
+    function escapeHtml(text){
+      return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function normalizeCodeLang(raw){
+      const aliasMap = {
+        js: 'javascript',
+        ts: 'typescript',
+        py: 'python',
+        sh: 'bash',
+        shell: 'bash',
+        zsh: 'bash',
+        yml: 'yaml',
+        html: 'markup',
+        xml: 'markup'
+      };
+      const cleaned = String(raw || '').trim().toLowerCase().replace(/[^a-z0-9+#.-]/g, '');
+      return aliasMap[cleaned] || cleaned || 'text';
+    }
+
+    function formatInline(text){
+      return escapeHtml(text)
+        .replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    }
+
+    function renderCodeBlock(rawCode, rawLang){
+      const lang = normalizeCodeLang(rawLang);
+      const langLabel = escapeHtml(rawLang || lang || 'text');
+      const code = escapeHtml(rawCode || '');
+      return `
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-lang">${langLabel}</span>
+            <button type="button" class="code-copy-btn">Copy</button>
+          </div>
+          <pre><code class="language-${lang}">${code}</code></pre>
+        </div>
+      `;
+    }
+
+    function renderRichText(raw){
+      const lines = String(raw || '').replace(/\r/g, '').split('\n');
+      const html = [];
+      let inUl = false;
+      let inOl = false;
+      let inCode = false;
+      let codeLang = '';
+      let codeLines = [];
+
+      const closeLists = () => {
+        if (inUl) {
+          html.push('</ul>');
+          inUl = false;
+        }
+        if (inOl) {
+          html.push('</ol>');
+          inOl = false;
+        }
+      };
+
+      const closeCodeBlock = () => {
+        if (!inCode) return;
+        html.push(renderCodeBlock(codeLines.join('\n'), codeLang));
+        inCode = false;
+        codeLang = '';
+        codeLines = [];
+      };
+
+      for (const rawLine of lines) {
+        const fence = rawLine.match(/^```\s*([a-zA-Z0-9_+#.-]*)\s*$/);
+        if (fence) {
+          if (inCode) {
+            closeCodeBlock();
+          } else {
+            closeLists();
+            inCode = true;
+            codeLang = fence[1] || '';
+            codeLines = [];
+          }
+          continue;
+        }
+
+        if (inCode) {
+          codeLines.push(rawLine);
+          continue;
+        }
+
+        const line = rawLine.trim();
+        if (!line) {
+          closeLists();
+          continue;
+        }
+
+        const divider = line.match(/^(?:---+|___+|\*\*\*+)$/);
+        if (divider) {
+          closeLists();
+          html.push('<hr>');
+          continue;
+        }
+
+        const heading = line.match(/^(#{1,4})\s+(.*)$/);
+        if (heading) {
+          closeLists();
+          const level = Math.min(4, heading[1].length);
+          html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+          continue;
+        }
+
+        const ordered = line.match(/^\d+[.)]\s+(.*)$/);
+        if (ordered) {
+          if (!inOl) {
+            closeLists();
+            html.push('<ol>');
+            inOl = true;
+          }
+          html.push(`<li>${formatInline(ordered[1])}</li>`);
+          continue;
+        }
+
+        const bullet = line.match(/^[-*]\s+(.*)$/);
+        if (bullet) {
+          if (!inUl) {
+            closeLists();
+            html.push('<ul>');
+            inUl = true;
+          }
+          html.push(`<li>${formatInline(bullet[1])}</li>`);
+          continue;
+        }
+
+        const quote = line.match(/^>\s?(.*)$/);
+        if (quote) {
+          closeLists();
+          html.push(`<blockquote>${formatInline(quote[1])}</blockquote>`);
+          continue;
+        }
+
+        closeLists();
+        html.push(`<p>${formatInline(line)}</p>`);
+      }
+
+      closeLists();
+      closeCodeBlock();
+      return html.join('');
+    }
+
+    function toClock(seconds){
+      const total = Math.max(0, Math.floor(Number(seconds) || 0));
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      if (h > 0) {
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function makeJumpUrl(srcUrl, timestamp){
+      if (!srcUrl || timestamp == null) return '';
+      const t = Math.max(0, Math.floor(Number(timestamp)));
+      try {
+        const u = new URL(srcUrl);
+        u.searchParams.set('t', `${t}s`);
+        return u.toString();
+      } catch {
+        const sep = srcUrl.includes('?') ? '&' : '?';
+        return `${srcUrl}${sep}t=${t}s`;
+      }
+    }
+
+    function el(tag, className){
+      const n = document.createElement(tag);
+      if (className) n.className = className;
+      return n;
+    }
+
+    function clearLatestFlags(){
+      chatMessages.querySelectorAll('.is-latest').forEach((node) => {
+        node.classList.remove('is-latest');
+      });
+    }
+
+    function removeEmptyState(){
+      chatMessages.querySelector('.chat-empty')?.remove();
+    }
+
+    function createThinkingDots(container){
+      for (let i = 0; i < 3; i += 1) {
+        container.appendChild(el('span', 'thinking-dot'));
+      }
+    }
+
+    function createUserMessage(text, isLatest = false){
+      const latestClass = isLatest ? ' is-latest' : '';
+      const userMsg = el('div', `msg user${latestClass}`);
+      const userBubble = el('div', 'bubble user');
+      const userText = el('div', 'bubble-text');
+      userText.textContent = text || '';
+      userBubble.appendChild(userText);
+      userMsg.appendChild(userBubble);
+      return { msg: userMsg, bubble: userBubble, text: userText };
+    }
+
+    function appendSegmentsToBubble(asstBubble, turn){
+      if (!asstBubble) return;
+      asstBubble.querySelector('.segment-dropdown')?.remove();
+
+      const segs = Array.isArray(turn?.segments) ? turn.segments : [];
+      if (!segs.length) return;
+
+      const drop = el('details', 'segment-dropdown');
+      const summary = el('summary', 'segment-summary');
+      summary.textContent = 'Relevant segments to rewatch';
+      drop.appendChild(summary);
+
+      const list = el('div', 'segment-list');
+      segs.forEach((seg, segIndex) => {
+        const start = Number(seg.start ?? seg.start_time ?? 0);
+        const end = Number(seg.end ?? seg.end_time ?? start);
+        const rank = Number(seg.rank || (segIndex + 1));
+        const label = `[${rank}] ${toClock(start)}-${toClock(end)}`;
+        const jumpUrl = makeJumpUrl(turn?.srcUrl || payload.srcUrl, start);
+
+        const item = el('div', 'segment-item');
+        if (jumpUrl) {
+          const a = el('a', 'segment-link');
+          a.href = jumpUrl;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = label;
+          item.appendChild(a);
+        } else {
+          const span = el('span', 'segment-link segment-link-disabled');
+          span.textContent = label;
+          item.appendChild(span);
+        }
+        list.appendChild(item);
+      });
+
+      drop.appendChild(list);
+      asstBubble.appendChild(drop);
+    }
+
+    function createAssistantMessage(turn = {}, isLatest = false){
+      const latestClass = isLatest ? ' is-latest' : '';
+      const asstMsg = el('div', `msg assistant${latestClass}`);
+      const asstBubble = el('div', 'bubble assistant');
+      let asstText = null;
+
+      if (turn?.thinking) {
+        asstBubble.classList.add('thinking-bubble');
+        asstBubble.setAttribute('aria-label', 'Assistant is thinking');
+        createThinkingDots(asstBubble);
+      } else {
+        asstText = el('div', 'bubble-text rich-text');
+        asstText.innerHTML = renderRichText(turn?.a || '');
+        asstBubble.appendChild(asstText);
+        appendSegmentsToBubble(asstBubble, turn);
+      }
+
+      asstMsg.appendChild(asstBubble);
+      return { msg: asstMsg, bubble: asstBubble, text: asstText };
+    }
+
+    function ensureAssistantTextNode(streamUi){
+      if (streamUi.text) return streamUi.text;
+      streamUi.bubble.classList.remove('thinking-bubble');
+      streamUi.bubble.removeAttribute('aria-label');
+      streamUi.bubble.innerHTML = '';
+      streamUi.text = el('div', 'bubble-text rich-text');
+      streamUi.bubble.appendChild(streamUi.text);
+      return streamUi.text;
+    }
+
+    function updateAssistantMessage(streamUi, answer, turn = {}, isFinal = false){
+      const asstText = ensureAssistantTextNode(streamUi);
+      asstText.innerHTML = renderRichText(answer || '');
+      if (isFinal) {
+        appendSegmentsToBubble(streamUi.bubble, turn);
+        enhanceCodeBlocks(streamUi.bubble);
+      }
+    }
+
+    function enhanceCodeBlocks(root){
+      if (!root) return;
+
+      root.querySelectorAll('.code-copy-btn').forEach((btn) => {
+        if (btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+
+        btn.addEventListener('click', async () => {
+          const codeNode = btn.closest('.code-block')?.querySelector('code');
+          const text = codeNode?.textContent || '';
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.classList.add('is-copied');
+            btn.textContent = 'Copied';
+            setTimeout(() => {
+              btn.classList.remove('is-copied');
+              btn.textContent = 'Copy';
+            }, 1200);
+          } catch {
+            btn.textContent = 'Failed';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+          }
+        });
+      });
+
+      if (window.Prism?.highlightAllUnder) {
+        window.Prism.highlightAllUnder(root);
+      } else if (window.Prism?.highlightElement) {
+        root.querySelectorAll('code[class*="language-"]').forEach((node) => {
+          window.Prism.highlightElement(node);
+        });
+      }
+    }
+
+    function updateScrollButton(){
+      if (!chatScroll || !scrollBottomBtn) return;
+      const distanceFromBottom = chatScroll.scrollHeight - (chatScroll.scrollTop + chatScroll.clientHeight);
+      scrollBottomBtn.classList.toggle('is-visible', distanceFromBottom > 60);
+    }
+
+    function scrollToBottom(smooth = false){
+      if (!chatScroll) return;
+      chatScroll.scrollTo({
+        top: chatScroll.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+      updateScrollButton();
+    }
+
+    function render(hist){
+      chatMessages.innerHTML = '';
+
+      if (!hist.length){
+        const empty = el('div', 'chat-empty');
+        empty.textContent = 'Your conversation will appear here.';
+        chatMessages.appendChild(empty);
+        updateScrollButton();
+        return;
+      }
+
+      const latestIndex = hist.length - 1;
+
+      hist.forEach((turn, idx) => {
+        const isLatest = idx === latestIndex;
+        chatMessages.appendChild(createUserMessage(turn.q || '', isLatest).msg);
+        chatMessages.appendChild(createAssistantMessage(turn, isLatest).msg);
+      });
+
+      enhanceCodeBlocks(chatMessages);
+      updateScrollButton();
+    }
+
+    let chatHistory = loadHistory();
+
+    if (payload.question && payload.answer){
+      const turn = {
+        q: payload.question,
+        a: payload.answer,
+        mode: payload.mode || '',
+        timestamp: payload.timestamp,
+        srcUrl: payload.srcUrl || '',
+        segments: payload.segments || []
+      };
+
+      const last = chatHistory[chatHistory.length - 1];
+      if (!last || last.q !== turn.q || last.a !== turn.a){
+        chatHistory.push(turn);
+        saveHistory(chatHistory);
+      }
+    }
+
+    render(chatHistory);
+    requestAnimationFrame(() => scrollToBottom(false));
+
+    chatScroll?.addEventListener('scroll', updateScrollButton);
+    scrollBottomBtn?.addEventListener('click', () => scrollToBottom(true));
+
+    clearBtn?.addEventListener('click', () => {
+      localStorage.removeItem(storageKey);
+      chatHistory = [];
+      render(chatHistory);
+      requestAnimationFrame(() => scrollToBottom(false));
+    });
+
+    const qaForm = document.getElementById('qaForm');
+    const qaInput = document.getElementById('qaInput');
+    const qaSendBtn = document.getElementById('qaSendBtn');
+
+    async function readErrorMessage(response){
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json().catch(() => null);
+        if (data?.error) return String(data.error);
+      }
+
+      const text = await response.text().catch(() => '');
+      return text.trim() || `Request failed with status ${response.status}.`;
+    }
+
+    function safeParseJson(raw){
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    function parseSseBlock(block){
+      const lines = String(block || '').split('\n');
+      let eventName = 'message';
+      const dataLines = [];
+
+      lines.forEach((line) => {
+        if (!line || line.startsWith(':')) return;
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim() || 'message';
+          return;
+        }
+        if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      });
+
+      return { eventName, data: dataLines.join('\n') };
+    }
+
+    async function consumeSse(body, onEvent){
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        buffer = buffer.replace(/\r/g, '');
+
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          const parsed = parseSseBlock(block);
+          if (!parsed.data && parsed.eventName === 'message') continue;
+          await onEvent(parsed.eventName, parsed.data);
+        }
+
+        if (done) break;
+      }
+
+      if (buffer.trim()) {
+        const parsed = parseSseBlock(buffer);
+        if (parsed.data || parsed.eventName !== 'message') {
+          await onEvent(parsed.eventName, parsed.data);
+        }
+      }
+    }
+
+    const autoResize = () => {
+      if (!qaInput) return;
+      qaInput.style.height = '0px';
+      qaInput.style.height = `${Math.min(160, qaInput.scrollHeight)}px`;
+    };
+
+    if (qaInput){
+      qaInput.addEventListener('input', autoResize);
+      autoResize();
+
+      qaInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey){
+          e.preventDefault();
+          qaForm?.requestSubmit();
+        }
+      });
+    }
+
+    let sending = false;
+    qaForm?.addEventListener('submit', async (e) => {
+      if (sending) {
+        e.preventDefault();
+        return;
+      }
+
+      if (!window.fetch || !window.TextDecoder || !window.ReadableStream) {
+        return;
+      }
+
+      const text = String(qaInput?.value || '').trim();
+      if (!text) {
+        e.preventDefault();
+        return;
+      }
+
+      sending = true;
+      e.preventDefault();
+
+      qaForm.classList.add('is-sending');
+      qaInput?.setAttribute('readonly', 'readonly');
+      if (qaSendBtn) qaSendBtn.disabled = true;
+
+      clearLatestFlags();
+      removeEmptyState();
+
+      const currentQuestion = text;
+      const currentSrcUrl = String(qaForm.querySelector('input[name="src_url"]')?.value || payload.srcUrl || '');
+
+      chatMessages.appendChild(createUserMessage(currentQuestion, true).msg);
+      const streamUi = createAssistantMessage({ thinking: true }, true);
+      chatMessages.appendChild(streamUi.msg);
+
+      if (qaInput) {
+        qaInput.value = '';
+        autoResize();
+      }
+
+      scrollToBottom(true);
+
+      const formData = new FormData(qaForm);
+      formData.set('question', currentQuestion);
+      formData.set('top_k', String(topKValue));
+
+      let streamedAnswer = '';
+      let finalMode = '';
+      let finalTimestamp = null;
+      let finalSegments = [];
+      let finalized = false;
+      let firstChunkSeen = false;
+
+      const finalizeTurn = (answerText, modeOverride = '') => {
+        if (finalized) return;
+
+        const resolvedAnswer = String(answerText || '').trim() || 'Sorry, I could not produce an answer.';
+        const resolvedMode = String(modeOverride || finalMode || (firstChunkSeen ? 'gemini-rag' : 'error'));
+        const turn = {
+          q: currentQuestion,
+          a: resolvedAnswer,
+          mode: resolvedMode,
+          timestamp: Number.isFinite(finalTimestamp) ? finalTimestamp : null,
+          srcUrl: currentSrcUrl,
+          segments: Array.isArray(finalSegments) ? finalSegments : []
+        };
+
+        updateAssistantMessage(streamUi, resolvedAnswer, turn, true);
+        chatHistory.push(turn);
+        saveHistory(chatHistory);
+        finalized = true;
+      };
+
+      try {
+        const response = await fetch('{{ url_for('qa.qa_stream') }}', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            Accept: 'text/event-stream'
+          }
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(await readErrorMessage(response));
+        }
+
+        await consumeSse(response.body, async (eventName, rawData) => {
+          const eventData = safeParseJson(rawData) || {};
+
+          if (eventName === 'meta') {
+            if (Array.isArray(eventData.segments)) finalSegments = eventData.segments;
+            if (eventData.timestamp != null) {
+              const nextTimestamp = Number(eventData.timestamp);
+              finalTimestamp = Number.isFinite(nextTimestamp) ? nextTimestamp : finalTimestamp;
+            }
+            return;
+          }
+
+          if (eventName === 'chunk') {
+            const nextText = String(eventData.text || '');
+            if (!nextText) return;
+            firstChunkSeen = true;
+            streamedAnswer += nextText;
+            updateAssistantMessage(streamUi, streamedAnswer);
+            scrollToBottom(false);
+            return;
+          }
+
+          if (eventName === 'error') {
+            throw new Error(String(eventData.message || 'Streaming failed.'));
+          }
+
+          if (eventName === 'done') {
+            if (Array.isArray(eventData.segments)) finalSegments = eventData.segments;
+            if (eventData.timestamp != null) {
+              const nextTimestamp = Number(eventData.timestamp);
+              finalTimestamp = Number.isFinite(nextTimestamp) ? nextTimestamp : finalTimestamp;
+            }
+            finalMode = String(eventData.mode || finalMode || '');
+            streamedAnswer = String(eventData.answer || streamedAnswer || '');
+            finalizeTurn(streamedAnswer, finalMode);
+            scrollToBottom(true);
+          }
+        });
+
+        if (!finalized) {
+          finalizeTurn(streamedAnswer, finalMode || (firstChunkSeen ? 'gemini-rag' : 'error'));
+          scrollToBottom(true);
+        }
+      } catch (error) {
+        const fallbackAnswer = firstChunkSeen && streamedAnswer
+          ? streamedAnswer
+          : `Sorry, I couldn't answer that right now.\n\n${error?.message || 'Please try again in a moment.'}`;
+        finalizeTurn(fallbackAnswer, firstChunkSeen ? (finalMode || 'gemini-rag-partial') : 'error');
+        scrollToBottom(true);
+      } finally {
+        sending = false;
+        qaForm.classList.remove('is-sending');
+        qaInput?.removeAttribute('readonly');
+        if (qaSendBtn) qaSendBtn.disabled = false;
+        qaInput?.focus();
+      }
+    });
+  </script>
+</body>
+</html>

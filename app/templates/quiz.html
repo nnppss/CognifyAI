@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CognifyAI • Quiz</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg.mp4') }}">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg-rev.mp4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+<body class="landing qa docs quiz-page">
+  <div id="pageTransition" class="page-transition active" data-default-label="Generating quiz...">
+    <div class="page-transition-content" role="status" aria-live="polite">
+      <p id="pageTransitionLabel" class="page-transition-label page-transition-shimmer">Generating quiz...</p>
+    </div>
+  </div>
+  <noscript><style>#pageTransition{display:none;}</style></noscript>
+
+  <video
+    id="bgVideoA"
+    class="bg-video is-active"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <video
+    id="bgVideoB"
+    class="bg-video"
+    muted
+    playsinline
+    webkit-playsinline
+    preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"
+  ></video>
+
+  <div class="bg-overlay"></div>
+
+  <main class="chat-shell notes-shell docs-shell quiz-shell">
+    <header class="chat-header">
+      <div class="chat-title">Exam-Ready Quiz</div>
+      <div class="chat-meta">
+        <a class="pill" href="{{ url_for('library.dashboard') }}" data-transition-label="Opening library...">Library</a>
+        <a class="pill" href="{{ url_for('flashcards.flashcards_view', lecture_id=lecture_id) }}" data-transition-label="Opening flashcards...">Flashcards</a>
+        <a class="pill" href="{{ url_for('qa.qa_view', lecture_id=lecture_id, src_url=lecture_meta.get('source_url', '')) }}" data-transition-label="Opening Q&amp;A...">Q&A</a>
+        <a class="pill" href="{{ url_for('study.summary_view', lecture_id=lecture_id) }}" data-transition-label="Generating summary...">Summary</a>
+        <a class="pill" href="{{ url_for('study.notes_view', lecture_id=lecture_id) }}" data-transition-label="Generating notes...">Notes</a>
+        <a class="pill" href="{{ url_for('lectures.index') }}" data-transition-label="Opening lectures...">Change lecture</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="quiz-overview">
+      <div class="quiz-overview-copy">
+        <p class="doc-kicker">Practice mode</p>
+        <h2 class="doc-heading">Assess your understanding</h2>
+        <p class="doc-intro">Answer each question, submit for instant feedback, then regenerate for a fresh set.</p>
+      </div>
+
+      {% if total_score is not none %}
+        <div class="quiz-scoreboard" aria-live="polite">
+          <div class="quiz-score-value">{{ total_score }}%</div>
+          <div class="quiz-score-track">
+            <span
+              class="quiz-score-fill animate"
+              data-target="{{ total_score|float }}"
+              style="width: 0%;"
+            ></span>
+          </div>
+        </div>
+      {% else %}
+        <span class="pill pill-muted">Questions: {{ questions|length }}</span>
+      {% endif %}
+
+      {% if questions %}
+        <div class="quiz-progress" id="quizProgress" data-total="{{ questions|length }}">
+          <div class="quiz-progress-bar">
+            <span id="quizProgressFill" class="quiz-progress-fill" style="width: 0%;"></span>
+          </div>
+          <span id="quizProgressText" class="quiz-progress-text">0/{{ questions|length }} answered</span>
+        </div>
+      {% endif %}
+    </section>
+
+    {% if coaching and coaching.recommendations %}
+      <section class="quiz-coaching-panel">
+        <div class="quiz-coaching-head">
+          <div>
+            <p class="doc-kicker">Weakness-Aware Coaching</p>
+            <h3 class="doc-heading">Study next based on your recent performance</h3>
+          </div>
+          {% if coaching.last_quiz_score is not none %}
+            <span class="pill pill-muted">Latest score: {{ coaching.last_quiz_score }}%</span>
+          {% endif %}
+        </div>
+
+        <div class="quiz-coaching-grid">
+          {% for item in coaching.recommendations[:3] %}
+            <article class="quiz-coaching-card">
+              <div class="quiz-card-top">
+                <span class="quiz-qno">{{ item.concept }}</span>
+                <span class="quiz-type">{{ item.mistakes }} miss{{ '' if item.mistakes == 1 else 'es' }}</span>
+              </div>
+              <div class="library-chip-row">
+                <span class="pill pill-warn">Avg score: {{ (item.avg_score * 100)|round(0) }}%</span>
+                <a class="pill" href="{{ url_for('flashcards.flashcards_view', lecture_id=lecture_id) }}" data-transition-label="Opening flashcards...">Review Flashcards</a>
+              </div>
+              {% if item.segments %}
+                <div class="library-chip-row">
+                  {% for segment in item.segments %}
+                    <span class="pill pill-muted">{{ '%.0f'|format(segment.start) }}s-{{ '%.0f'|format(segment.end) }}s</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <div class="quiz-coaching-actions">
+                {% for action in item.actions %}
+                  <p>{{ action }}</p>
+                {% endfor %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    {% if questions %}
+      <form method="POST" action="{{ url_for('quiz.quiz_view') }}" class="quiz-form" data-transition-label="Checking quiz...">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="action" value="submit">
+
+        {% for q in questions %}
+          {% set q_index = loop.index %}
+          {% set answer_key = 'q_' ~ q_index %}
+          {% set previous_answer = request.form.get(answer_key, '') if request.method == 'POST' else '' %}
+          {% set previous_answers = request.form.getlist(answer_key) if request.method == 'POST' else [] %}
+
+          <section class="quiz-card" data-answer-key="{{ answer_key }}">
+            <div class="quiz-card-top">
+              <span class="quiz-qno">Q{{ q_index }}</span>
+              <span class="quiz-type">
+                {% if q.type == 'multi_select' %}
+                  Multiple Correct
+                {% else %}
+                  {{ q.type|replace('_', ' ')|title }}
+                {% endif %}
+              </span>
+            </div>
+            <h3>{{ q.question }}</h3>
+
+            {% if q.type in ['mcq', 'multi_select'] %}
+              {% set is_multi = q.type == 'multi_select' %}
+              {% for option in q.options %}
+                <label class="quiz-option {% if is_multi %}is-multi{% endif %}">
+                  <input
+                    type="{{ 'checkbox' if is_multi else 'radio' }}"
+                    name="{{ answer_key }}"
+                    value="{{ option }}"
+                    {% if is_multi and option in previous_answers %}checked{% endif %}
+                    {% if (not is_multi) and previous_answer == option %}checked{% endif %}
+                  >
+                  <span>{{ option }}</span>
+                </label>
+              {% endfor %}
+            {% elif q.type == 'true_false' %}
+              <label class="quiz-option">
+                <input type="radio" name="{{ answer_key }}" value="True" {% if previous_answer == 'True' %}checked{% endif %}>
+                <span>True</span>
+              </label>
+              <label class="quiz-option">
+                <input type="radio" name="{{ answer_key }}" value="False" {% if previous_answer == 'False' %}checked{% endif %}>
+                <span>False</span>
+              </label>
+            {% else %}
+              <textarea class="quiz-text" name="{{ answer_key }}" rows="3" placeholder="Write your answer">{{ previous_answer }}</textarea>
+            {% endif %}
+
+            {% if results %}
+              {% set r = results[loop.index0] %}
+              <div class="quiz-result {% if r.score >= 0.99 %}is-correct{% elif r.score <= 0.01 %}is-wrong{% else %}is-partial{% endif %}">
+                <span class="quiz-result-icon">
+                  {% if r.score >= 0.99 %}OK{% elif r.score <= 0.01 %}NO{% else %}PART{% endif %}
+                </span>
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Selected</span>
+                  <span class="quiz-result-value">{{ r.user_answer or 'No answer' }}</span>
+                </div>
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Correct answer</span>
+                  <span class="quiz-result-value">{{ r.correct }}</span>
+                </div>
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Assessment</span>
+                  <span class="quiz-result-value">{{ r.assessment }} • {{ (r.score * 100)|round(1) }}%</span>
+                </div>
+                {% if r.feedback %}
+                  <div class="quiz-result-row">
+                    <span class="quiz-result-label">Details</span>
+                    <span class="quiz-result-value">{{ r.feedback }}</span>
+                  </div>
+                {% endif %}
+                <div class="quiz-result-row">
+                  <span class="quiz-result-label">Why</span>
+                  <span class="quiz-result-value">{{ r.explanation }}</span>
+                </div>
+              </div>
+            {% endif %}
+          </section>
+        {% endfor %}
+
+        <div class="quiz-actions">
+          <button class="pill pill-primary" type="submit">Submit Quiz</button>
+        </div>
+      </form>
+
+      <form method="POST" action="{{ url_for('quiz.quiz_view') }}" class="quiz-actions-inline" data-transition-label="Generating quiz...">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="action" value="regenerate">
+        <button class="pill" type="submit" data-transition-label="Generating quiz...">Regenerate Quiz</button>
+      </form>
+    {% else %}
+      <section class="chat-empty">No questions generated yet. Try regenerating to create a new quiz.</section>
+      <form method="POST" action="{{ url_for('quiz.quiz_view') }}" class="quiz-actions-inline" data-transition-label="Generating quiz...">
+        <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+        <input type="hidden" name="action" value="regenerate">
+        <button class="pill" type="submit" data-transition-label="Generating quiz...">Generate Quiz</button>
+      </form>
+    {% endif %}
+  </main>
+
+  <script src="{{ url_for('static', filename='bg-boomerang.js') }}"></script>
+  <script>
+    const overlay = document.getElementById('pageTransition');
+    const overlayLabel = document.getElementById('pageTransitionLabel');
+    const quizForm = document.querySelector('.quiz-form');
+    const quizProgress = document.getElementById('quizProgress');
+    const quizProgressFill = document.getElementById('quizProgressFill');
+    const quizProgressText = document.getElementById('quizProgressText');
+    const scoreFill = document.querySelector('.quiz-score-fill.animate');
+
+    function setOverlayLabel(label){
+      if (!overlayLabel) return;
+      overlayLabel.textContent = label || overlay?.dataset.defaultLabel || 'Loading...';
+    }
+
+    function transitionLabelForUrl(url){
+      const path = String(url?.pathname || '').replace(/\/+$/, '');
+      if (path.endsWith('/summary')) return 'Generating summary...';
+      if (path.endsWith('/notes')) return 'Generating notes...';
+      if (path.endsWith('/quiz')) return 'Generating quiz...';
+      if (path.endsWith('/qa')) return 'Opening Q&A...';
+      return overlay?.dataset.defaultLabel || 'Loading...';
+    }
+
+    function activateOverlay(label){
+      setOverlayLabel(label);
+      overlay && overlay.classList.add('active');
+    }
+
+    let transitionLocked = false;
+
+    function afterTransitionPaint(callback){
+      requestAnimationFrame(() => requestAnimationFrame(callback));
+    }
+
+    function navigateWithOverlay(url, label){
+      if (transitionLocked) return;
+      transitionLocked = true;
+      document.documentElement.classList.add('page-slide-out');
+      activateOverlay(label);
+      afterTransitionPaint(() => {
+        window.location.href = url.href;
+      });
+    }
+
+    function submitWithOverlay(form, label){
+      if (transitionLocked) return;
+      transitionLocked = true;
+      document.documentElement.classList.add('page-slide-out');
+      activateOverlay(label);
+      afterTransitionPaint(() => {
+        HTMLFormElement.prototype.submit.call(form);
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setOverlayLabel(overlay?.dataset.defaultLabel || 'Loading...');
+      afterTransitionPaint(() => overlay && overlay.classList.remove('active'));
+
+      if (scoreFill) {
+        const target = Math.max(0, Math.min(100, Number(scoreFill.dataset.target || 0)));
+        requestAnimationFrame(() => {
+          scoreFill.classList.remove('animate');
+          scoreFill.style.width = `${target}%`;
+        });
+      }
+
+      updateQuizProgress();
+    }, { once: true });
+
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a');
+      if (!a || a.target === '_blank') return;
+
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+
+      e.preventDefault();
+      navigateWithOverlay(url, a.dataset.transitionLabel || transitionLabelForUrl(url));
+    });
+
+    document.querySelectorAll('form').forEach((form) => {
+      form.addEventListener('submit', (event) => {
+        const submitLabel = event.submitter?.dataset.transitionLabel || form.dataset.transitionLabel || overlay?.dataset.defaultLabel || 'Loading...';
+        event.preventDefault();
+        submitWithOverlay(form, submitLabel);
+      });
+    });
+
+    function updateQuizProgress(){
+      if (!quizProgress || !quizProgressFill || !quizProgressText) return;
+
+      const cards = Array.from(document.querySelectorAll('.quiz-card[data-answer-key]'));
+      const total = Number(quizProgress.dataset.total || cards.length || 0);
+      if (!total) return;
+
+      let answered = 0;
+      cards.forEach((card) => {
+        const hasChecked = card.querySelector('input[type="radio"]:checked, input[type="checkbox"]:checked');
+        if (hasChecked) {
+          answered += 1;
+          return;
+        }
+
+        const textInput = card.querySelector('textarea, input[type="text"], input[type="search"]');
+        if (textInput && String(textInput.value || '').trim()) {
+          answered += 1;
+        }
+      });
+
+      const pct = Math.max(0, Math.min(100, (answered / total) * 100));
+      quizProgressFill.style.width = `${pct}%`;
+      quizProgressText.textContent = `${answered}/${total} answered`;
+    }
+
+    quizForm?.addEventListener('input', updateQuizProgress);
+    quizForm?.addEventListener('change', updateQuizProgress);
+
+    setupBoomerangBackground('bgVideoA', 'bgVideoB');
+  </script>
+</body>
+</html>

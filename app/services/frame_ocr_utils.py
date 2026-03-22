@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 import subprocess
 from difflib import SequenceMatcher
@@ -7,13 +8,14 @@ from typing import Dict, List
 import pytesseract  # type: ignore[reportMissingImports]
 from PIL import Image, ImageOps
 
-from config import (
+from app.config.settings import (
     FRAME_DIR,
     OCR_FRAME_SAMPLE_SECONDS,
     OCR_MIN_CONFIDENCE,
     OCR_MAX_FRAMES,
     OCR_MAX_WORDS_PER_FRAME,
     OCR_MIN_TEXT_CHARS,
+    OCR_WORKERS,
 )
 
 
@@ -101,6 +103,26 @@ def _ocr_image(image_path: Path) -> tuple[str, float]:
     return text, avg_conf
 
 
+def _build_ocr_candidate(image_path: Path, frame_index: int, sample_seconds: int) -> Dict | None:
+    try:
+        text, confidence = _ocr_image(image_path)
+    except pytesseract.TesseractNotFoundError as exc:
+        raise RuntimeError("Tesseract OCR is not installed.") from exc
+
+    if confidence < OCR_MIN_CONFIDENCE:
+        return None
+    if not _is_good_ocr_text(text):
+        return None
+
+    start = float(frame_index * sample_seconds)
+    end = float(start + sample_seconds)
+    return {
+        "text": text,
+        "start": start,
+        "end": end,
+    }
+
+
 def extract_frame_ocr_segments(
     video_path: str,
     lecture_id: str,
@@ -116,27 +138,32 @@ def extract_frame_ocr_segments(
     frame_pattern = str(frame_dir / "frame_%05d.jpg")
     _extract_frames(video_path, frame_pattern, sample_seconds=sample_seconds, max_frames=max_frames)
 
+    image_paths = sorted(frame_dir.glob("frame_*.jpg"))
     segments: List[Dict] = []
     previous_text = ""
 
-    for idx, image_path in enumerate(sorted(frame_dir.glob("frame_*.jpg"))):
-        try:
-            text, confidence = _ocr_image(image_path)
-        except pytesseract.TesseractNotFoundError as exc:
-            raise RuntimeError("Tesseract OCR is not installed.") from exc
+    ordered_candidates: List[Dict | None] = [None] * len(image_paths)
+    if image_paths:
+        max_workers = max(1, min(OCR_WORKERS, len(image_paths)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(_build_ocr_candidate, image_path, idx, sample_seconds): idx
+                for idx, image_path in enumerate(image_paths)
+            }
+            for future in as_completed(future_map):
+                idx = future_map[future]
+                ordered_candidates[idx] = future.result()
 
-        if confidence < OCR_MIN_CONFIDENCE:
+    for candidate in ordered_candidates:
+        if not candidate:
             continue
-        if not _is_good_ocr_text(text):
-            continue
+
+        text = candidate["text"]
         if _is_near_duplicate(text, previous_text):
             continue
 
-        start = float(idx * sample_seconds)
-        end = float(start + sample_seconds)
         tagged = f"[Visual] {text}"
-
-        segments.append({"text": tagged, "start": start, "end": end})
+        segments.append({"text": tagged, "start": candidate["start"], "end": candidate["end"]})
         previous_text = text
 
     return segments

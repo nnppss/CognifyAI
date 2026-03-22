@@ -1,10 +1,12 @@
+<div align="center">
+
 # CognifyAI
 
 Turn lecture videos into a searchable AI study workspace.
 
 `Flask` `Gemini` `RAG` `OCR` `YouTube` `Local Video`
 
-
+</div>
 
 ## What It Is
 
@@ -154,7 +156,7 @@ Open `http://127.0.0.1:8000` in your browser.
 ## Notes
 
 - Local uploads support `mp4`, `mkv`, `avi`, and `mov`
-- Maximum upload size for local upload files is `500 MB`
+- Maximum upload size is `500 MB`
 - Generated files and study data are stored locally in `data/`
 - No separate database setup is required
 

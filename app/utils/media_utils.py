@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import time
@@ -8,7 +7,9 @@ from typing import Any, Dict, cast
 
 import yt_dlp
 
-from config import ALLOWED_UPLOAD_EXTENSIONS, AUDIO_DIR, LECTURE_META_DIR, UPLOAD_DIR
+from app.config.settings import ALLOWED_UPLOAD_EXTENSIONS, AUDIO_DIR, UPLOAD_DIR
+from app.utils.study_storage import load_lecture_metadata as load_saved_lecture_metadata
+from app.utils.study_storage import save_lecture_metadata as save_saved_lecture_metadata
 
 
 def allowed_file(filename: str) -> bool:
@@ -150,15 +151,8 @@ def get_youtube_video_language(youtube_url: str) -> str:
 
 
 def save_lecture_metadata(lecture_id: str, payload: Dict) -> str:
-    path = os.path.join(LECTURE_META_DIR, f"{lecture_id}.json")
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-    return path
+    return save_saved_lecture_metadata(lecture_id, payload)
 
 
 def load_lecture_metadata(lecture_id: str) -> Dict:
-    path = os.path.join(LECTURE_META_DIR, f"{lecture_id}.json")
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+    return load_saved_lecture_metadata(lecture_id)

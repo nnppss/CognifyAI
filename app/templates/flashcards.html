@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CognifyAI • Flashcards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Abhaya+Libre:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg.mp4') }}">
+  <link rel="preload" as="video" href="{{ url_for('static', filename='intro-bg-rev.mp4') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+</head>
+<body class="landing qa docs flashcards-page">
+  <div id="pageTransition" class="page-transition active" data-default-label="Opening flashcards...">
+    <div class="page-transition-content" role="status" aria-live="polite">
+      <p id="pageTransitionLabel" class="page-transition-label page-transition-shimmer">Opening flashcards...</p>
+    </div>
+  </div>
+  <noscript><style>#pageTransition{display:none;}</style></noscript>
+
+  <video id="bgVideoA" class="bg-video is-active" muted playsinline webkit-playsinline preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"></video>
+  <video id="bgVideoB" class="bg-video" muted playsinline webkit-playsinline preload="auto"
+    data-forward="{{ url_for('static', filename='intro-bg.mp4') }}"
+    data-reverse="{{ url_for('static', filename='intro-bg-rev.mp4') }}"></video>
+
+  <div class="bg-overlay"></div>
+
+  <main class="chat-shell notes-shell docs-shell flashcards-shell">
+    <header class="chat-header">
+      <div class="chat-title">{% if lecture_id %}Lecture Flashcards{% else %}Due Today Review{% endif %}</div>
+      <div class="chat-meta">
+        <a class="pill {% if not lecture_id %}is-active{% endif %}" href="{{ url_for('library.dashboard') }}" data-transition-label="Opening library...">Library</a>
+        {% if lecture_id %}
+          <a class="pill" href="{{ url_for('qa.qa_view', lecture_id=lecture_id, src_url=lecture_meta.get('source_url', '')) }}" data-transition-label="Opening Q&amp;A...">Q&amp;A</a>
+          <a class="pill" href="{{ url_for('quiz.quiz_view', lecture_id=lecture_id) }}" data-transition-label="Generating quiz...">Quiz</a>
+          {% if lecture_meta.get('has_notes') %}
+            <a class="pill" href="{{ url_for('study.notes_view', lecture_id=lecture_id) }}" data-transition-label="Generating notes...">Notes</a>
+          {% endif %}
+        {% endif %}
+        <a class="pill" href="{{ url_for('lectures.index') }}" data-transition-label="Opening lectures...">Process Lecture</a>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if not lecture_id %}
+      <section class="flashcards-overview">
+        <div>
+          <p class="doc-kicker">Grouped by lecture</p>
+          <h2 class="doc-heading">Work through today&apos;s due cards one lecture block at a time</h2>
+          <p class="doc-intro">Start a lecture block, clear the due stack, then return to the dashboard for the next study decision.</p>
+        </div>
+        <div class="library-stats-grid flashcards-stats-grid">
+          <article class="library-stat-card">
+            <span class="library-stat-label">Due Today</span>
+            <strong class="library-stat-value">{{ dashboard.stats.due_today }}</strong>
+          </article>
+          <article class="library-stat-card">
+            <span class="library-stat-label">Overdue</span>
+            <strong class="library-stat-value">{{ dashboard.stats.overdue }}</strong>
+          </article>
+        </div>
+      </section>
+
+      {% if due_groups %}
+        <section class="flashcards-groups">
+          {% for lecture in due_groups %}
+            <article class="flashcard-group-card">
+              <div class="flashcard-group-head">
+                <div>
+                  <h3>{{ lecture.title or lecture.lecture_id }}</h3>
+                  <p>{{ lecture.source_label or lecture.lecture_id }}</p>
+                </div>
+                <div class="library-chip-row">
+                  {% if lecture.overdue_count %}<span class="pill pill-danger">{{ lecture.overdue_count }} overdue</span>{% endif %}
+                  {% if lecture.due_today_count %}<span class="pill pill-warn">{{ lecture.due_today_count }} due today</span>{% endif %}
+                </div>
+              </div>
+
+              {% if lecture.weak_concepts %}
+                <div class="library-chip-row">
+                  {% for concept in lecture.weak_concepts[:3] %}
+                    <span class="pill pill-muted">{{ concept.label }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              <div class="library-card-actions">
+                <a class="pill pill-primary" href="{{ url_for('flashcards.flashcards_view', lecture_id=lecture.lecture_id) }}" data-transition-label="Opening flashcards...">Start Lecture Block</a>
+                <a class="pill" href="{{ url_for('qa.qa_view', lecture_id=lecture.lecture_id, src_url=lecture.source_url or '') }}" data-transition-label="Opening Q&amp;A...">Q&amp;A</a>
+                <a class="pill" href="{{ url_for('quiz.quiz_view', lecture_id=lecture.lecture_id) }}" data-transition-label="Generating quiz...">Quiz</a>
+              </div>
+            </article>
+          {% endfor %}
+        </section>
+      {% else %}
+        <section class="chat-empty">No flashcards are due right now. Return to the library to open a lecture, generate a deck, or review your next weak concept.</section>
+        <div class="quiz-actions-inline">
+          <a class="pill pill-primary" href="{{ url_for('library.dashboard') }}" data-transition-label="Opening library...">Back to Library</a>
+        </div>
+      {% endif %}
+    {% else %}
+      <section class="flashcards-overview">
+        <div>
+          <p class="doc-kicker">{{ lecture_meta.get('title', lecture_id) }}</p>
+          <h2 class="doc-heading">Review one card, rate it, and keep the lecture block moving</h2>
+          <p class="doc-intro">Cards are spaced locally on this machine. Finishing this lecture&apos;s due cards returns you to the library dashboard.</p>
+        </div>
+        <div class="library-chip-row">
+          <span class="pill pill-muted">Deck: {{ lecture_summary.card_count }}</span>
+          <span class="pill pill-warn">Due: {{ lecture_summary.due_today_count }}</span>
+          {% if lecture_summary.overdue_count %}
+            <span class="pill pill-danger">Overdue: {{ lecture_summary.overdue_count }}</span>
+          {% endif %}
+        </div>
+      </section>
+
+      {% if current_card %}
+        <section class="flashcard-review-layout">
+          <article class="flashcard-review-card">
+            <div class="flashcard-card-shell">
+              <p class="doc-kicker">{{ current_card.concept }}</p>
+              <h3>{{ current_card.front }}</h3>
+              {% if current_card.hint %}
+                <p class="flashcard-hint">Hint: {{ current_card.hint }}</p>
+              {% endif %}
+
+              <button id="revealAnswerBtn" class="pill pill-primary" type="button">Reveal Answer</button>
+
+              <div id="flashcardAnswer" class="flashcard-answer" hidden>
+                <p>{{ current_card.back }}</p>
+                {% if current_card.source_segments %}
+                  <div class="library-chip-row">
+                    {% for segment in current_card.source_segments %}
+                      <span class="pill pill-muted">{{ '%.0f'|format(segment.start) }}s-{{ '%.0f'|format(segment.end) }}s</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <form id="flashcardReviewForm" method="POST" action="{{ url_for('flashcards.review_flashcard') }}" class="flashcard-rating-form" hidden data-transition-label="Saving review...">
+              <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+              <input type="hidden" name="card_id" value="{{ current_card.card_id }}">
+              <button class="pill pill-danger" type="submit" name="rating" value="again">Again</button>
+              <button class="pill pill-warn" type="submit" name="rating" value="hard">Hard</button>
+              <button class="pill pill-success" type="submit" name="rating" value="good">Good</button>
+              <button class="pill pill-primary" type="submit" name="rating" value="easy">Easy</button>
+            </form>
+          </article>
+
+          <aside class="flashcard-side-panel">
+            <section class="flashcard-side-card">
+              <p class="doc-kicker">Queue</p>
+              <h3>Up next in this lecture</h3>
+              {% if queue_cards %}
+                <div class="flashcard-mini-list">
+                  {% for card in queue_cards %}
+                    <article class="flashcard-mini-item">
+                      <strong>{{ card.concept }}</strong>
+                      <span>{{ card.front }}</span>
+                    </article>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="doc-intro">This is the last due card in the current lecture block.</p>
+              {% endif %}
+            </section>
+
+            {% if coaching.recommendations %}
+              <section class="flashcard-side-card">
+                <p class="doc-kicker">Weakness-Aware Coaching</p>
+                <h3>Focus areas from recent quiz attempts</h3>
+                <div class="flashcard-mini-list">
+                  {% for item in coaching.recommendations[:2] %}
+                    <article class="flashcard-mini-item">
+                      <strong>{{ item.concept }}</strong>
+                      <span>{{ item.actions[0] if item.actions else 'Review this concept again.' }}</span>
+                    </article>
+                  {% endfor %}
+                </div>
+              </section>
+            {% endif %}
+
+            <section class="flashcard-side-card">
+              <p class="doc-kicker">Deck Actions</p>
+              <div class="library-card-actions">
+                <form method="POST" action="{{ url_for('flashcards.regenerate_flashcards') }}" data-transition-label="Regenerating flashcards...">
+                  <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+                  <button class="pill" type="submit">Regenerate Deck</button>
+                </form>
+                <a class="pill" href="{{ url_for('library.dashboard') }}" data-transition-label="Opening library...">Back to Library</a>
+              </div>
+            </section>
+          </aside>
+        </section>
+      {% else %}
+        <section class="flashcard-complete-card">
+          <p class="doc-kicker">Lecture Block Complete</p>
+          <h2 class="doc-heading">No due cards remain for this lecture right now</h2>
+          <p class="doc-intro">You can return to the library, open another lecture block, or regenerate this deck if you want a fresh pass later.</p>
+          <div class="library-card-actions">
+            <a class="pill pill-primary" href="{{ url_for('library.dashboard') }}" data-transition-label="Opening library...">Return to Library</a>
+            <form method="POST" action="{{ url_for('flashcards.regenerate_flashcards') }}" data-transition-label="Regenerating flashcards...">
+              <input type="hidden" name="lecture_id" value="{{ lecture_id }}">
+              <button class="pill" type="submit">Regenerate Deck</button>
+            </form>
+          </div>
+        </section>
+      {% endif %}
+    {% endif %}
+  </main>
+
+  <script src="{{ url_for('static', filename='bg-boomerang.js') }}"></script>
+  <script>
+    const overlay = document.getElementById('pageTransition');
+    const overlayLabel = document.getElementById('pageTransitionLabel');
+    const revealBtn = document.getElementById('revealAnswerBtn');
+    const answerBlock = document.getElementById('flashcardAnswer');
+    const reviewForm = document.getElementById('flashcardReviewForm');
+
+    function setOverlayLabel(label){
+      if (!overlayLabel) return;
+      overlayLabel.textContent = label || overlay?.dataset.defaultLabel || 'Loading...';
+    }
+
+    function activateOverlay(label){
+      setOverlayLabel(label);
+      overlay && overlay.classList.add('active');
+    }
+
+    function transitionLabelForUrl(url){
+      const path = String(url?.pathname || '').replace(/\/+$/, '');
+      if (path.endsWith('/lectures')) return 'Opening library...';
+      if (path.endsWith('/flashcards')) return 'Opening flashcards...';
+      if (path.endsWith('/summary')) return 'Generating summary...';
+      if (path.endsWith('/notes')) return 'Generating notes...';
+      if (path.endsWith('/quiz')) return 'Generating quiz...';
+      if (path.endsWith('/qa')) return 'Opening Q&A...';
+      return overlay?.dataset.defaultLabel || 'Loading...';
+    }
+
+    let transitionLocked = false;
+    function afterTransitionPaint(callback){
+      requestAnimationFrame(() => requestAnimationFrame(callback));
+    }
+
+    function navigateWithOverlay(url, label){
+      if (transitionLocked) return;
+      transitionLocked = true;
+      document.documentElement.classList.add('page-slide-out');
+      activateOverlay(label);
+      afterTransitionPaint(() => { window.location.href = url.href; });
+    }
+
+    function submitWithOverlay(form, label){
+      if (transitionLocked) return;
+      transitionLocked = true;
+      document.documentElement.classList.add('page-slide-out');
+      activateOverlay(label);
+      afterTransitionPaint(() => { HTMLFormElement.prototype.submit.call(form); });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setOverlayLabel(overlay?.dataset.defaultLabel || 'Loading...');
+      afterTransitionPaint(() => overlay && overlay.classList.remove('active'));
+    }, { once: true });
+
+    document.addEventListener('click', (e) => {
+      const anchor = e.target.closest('a');
+      if (!anchor || anchor.target === '_blank') return;
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      e.preventDefault();
+      navigateWithOverlay(url, anchor.dataset.transitionLabel || transitionLabelForUrl(url));
+    });
+
+    document.querySelectorAll('form').forEach((form) => {
+      if (form.id === 'flashcardReviewForm') return;
+      form.addEventListener('submit', (event) => {
+        const label = event.submitter?.dataset.transitionLabel || form.dataset.transitionLabel || overlay?.dataset.defaultLabel || 'Loading...';
+        event.preventDefault();
+        submitWithOverlay(form, label);
+      });
+    });
+
+    if (reviewForm) {
+      reviewForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const rating = event.submitter?.value || '';
+        if (!rating) return;
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'rating';
+        hiddenInput.value = rating;
+        reviewForm.appendChild(hiddenInput);
+        const label = 'Saving review...';
+        submitWithOverlay(reviewForm, label);
+      });
+    }
+
+    revealBtn?.addEventListener('click', () => {
+      revealBtn.hidden = true;
+      if (answerBlock) answerBlock.hidden = false;
+      if (reviewForm) reviewForm.hidden = false;
+    });
+
+    setupBoomerangBackground('bgVideoA', 'bgVideoB');
+  </script>
+</body>
+</html>

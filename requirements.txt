@@ -16,3 +16,4 @@ tqdm
 rank-bm25
 
 google-genai
+requests

@@ -5,7 +5,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-from config import PDF_DIR
+from app.config.settings import PDF_DIR
 
 
 def _to_paragraphs(text: str) -> List[Paragraph]:

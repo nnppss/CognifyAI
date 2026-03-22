@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 from speechmatics.batch_client import BatchClient
 from speechmatics.models import ConnectionSettings
 
-from config import SPEECHMATICS_API_KEY, SPEECHMATICS_API_URL
+from app.config.settings import SPEECHMATICS_API_KEY, SPEECHMATICS_API_URL
 
 
 def _is_ssl_verify_error(exc: Exception) -> bool:
