@@ -1,168 +1,175 @@
-
-
 # CognifyAI
 
-Turn lecture videos into a searchable AI study workspace.
+AI-powered lecture study platform with RAG-based Q&A, quiz generation, flashcards, and spaced repetition.
 
-`Flask` `Gemini` `RAG` `OCR` `YouTube` `Local Video`
+Runs on **macOS, Linux, and Windows**. One command to install, one command to run.
 
+## Features
 
+- **Lecture Processing** — YouTube URL or local video upload with transcript extraction + OCR
+- **RAG Q&A** — Hybrid semantic + lexical retrieval with streaming Gemini responses
+- **Smart Summary** — Multi-pass academic summaries with PDF export
+- **Detailed Notes** — Structured lecture notes with table of contents
+- **Exam Quiz** — Auto-generated MCQ, multi-select, true/false, and short-answer questions
+- **Flashcards** — Spaced repetition with Again/Hard/Good/Easy ratings
+- **Coaching** — Weakness-aware study recommendations based on quiz performance
+- **Library Dashboard** — Centralized view of all lectures with due card tracking
 
-## What It Is
+## Quick start
 
-CognifyAI processes a lecture video and turns it into a study workspace. It combines transcript text, on-screen text extracted from video frames, and AI-generated study tools so you can ask questions, review faster, and revisit key concepts later.
+You'll need a free Gemini API key: https://aistudio.google.com/app/apikey
 
-## Highlights
-
-- Process a YouTube lecture or a local video upload
-- Combine spoken transcript text and visual OCR text into one searchable lecture context
-- Ask lecture-specific questions with timestamp-aware answers
-- Generate summaries, detailed notes, flashcards, and quizzes
-- Download summaries and notes as PDF files
-- Save processed lectures locally in a library dashboard for later review
-
-## Tech Stack
-
-| Layer | Tools | Purpose |
-| --- | --- | --- |
-| Backend | Flask, Jinja2 | Web app routes, templates, and server logic |
-| LLM | Google Gemini | Answers, summaries, notes, quizzes, and flashcards |
-| Retrieval | Sentence Transformers, Rank-BM25, NumPy | Embeddings, hybrid search, and ranking |
-| Transcript + Media | yt-dlp, youtube-transcript-api, Speechmatics, FFmpeg | Video input, transcript fetching, fallback transcription, audio/frame extraction |
-| OCR | Tesseract, pytesseract, Pillow | Extract on-screen text from sampled lecture frames |
-| Output + Storage | ReportLab, local JSON/NPY/PDF files in `data/` | PDF export and local persistence |
-
-## Workflow
-
-1. Add a lecture using a YouTube URL or a local video upload.
-2. Fetch the transcript from YouTube, or fall back to Speechmatics transcription when needed.
-3. Sample video frames with FFmpeg and extract on-screen text with Tesseract OCR.
-4. Merge transcript text and OCR text into lecture chunks, then build searchable indexes and embeddings.
-5. Retrieve the most relevant chunks with hybrid search and use Gemini to answer questions.
-6. Generate summaries, notes, flashcards, quizzes, and PDFs from the processed lecture.
-7. Save everything locally so the lecture can be reopened from the library dashboard.
-
-## Installation
-
-You need `ffmpeg`, `tesseract`, and Python 3 installed before running the app.
-
-### macOS
-
-1. Install system dependencies:
-
-   ```bash
-   brew install ffmpeg tesseract
-   ```
-
-2. If `python3` is not already installed:
-
-   ```bash
-   brew install python
-   ```
-
-3. Create a virtual environment and install Python packages:
-
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   python -m pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-### Windows
-
-1. Install Python 3 if it is not already installed. Make sure Python is added to `PATH`.
-
-2. Install system dependencies:
-
-   ```powershell
-   winget install -e --id Gyan.FFmpeg
-   winget install -e --id UB-Mannheim.TesseractOCR
-   ```
-
-3. Open a new terminal so the installed tools are available on `PATH`.
-
-4. Create a virtual environment and install Python packages:
-
-   ```powershell
-   py -3 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   python -m pip install --upgrade pip
-   pip install -r requirements.txt
-   ```
-
-   If you use Command Prompt instead of PowerShell:
-
-   ```bat
-   .\.venv\Scripts\activate.bat
-   pip install -r requirements.txt
-   ```
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key
-SPEECHMATICS_API_KEY=your_speechmatics_api_key
-GEMINI_MODEL_NAME=gemini-2.5-flash
-```
-
-- `GEMINI_API_KEY` is used for answers, summaries, notes, quizzes, and flashcards
-- `SPEECHMATICS_API_KEY` is used for uploaded videos and YouTube fallback transcription
-- `GEMINI_MODEL_NAME` is optional
-
-## Running
-
-### macOS
+### macOS / Linux
 
 ```bash
-source .venv/bin/activate
-python3 run.py
+git clone https://github.com/<your-username>/CognifyAI.git
+cd CognifyAI
+./install.sh        # one-time setup; prompts for GEMINI_API_KEY
+./start.sh          # boots backend + frontend, opens http://localhost:3000
 ```
+
+Press `Ctrl+C` to stop. Re-running `./start.sh` later is instant — nothing is reinstalled unless dependencies actually changed.
+
+> **Missing system tools?** If `./install.sh` reports them, install with one of:
+> - **macOS:** `brew install python node ffmpeg tesseract git`
+> - **Linux:** `sudo apt install -y python3 python3-venv python3-pip nodejs npm ffmpeg tesseract-ocr git`
+> - Or run `./install.sh --auto-tools` to attempt it for you.
 
 ### Windows
 
-PowerShell:
+In PowerShell or Command Prompt (or just **double-click** `install.bat` in Explorer):
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python run.py
+git clone https://github.com/<your-username>/CognifyAI.git
+cd CognifyAI
+.\install.bat        # one-time setup; prompts for GEMINI_API_KEY
+.\start.bat          # boots backend + frontend, opens http://localhost:3000
 ```
 
-Command Prompt:
+Press `Ctrl+C` to stop.
 
-```bat
-.\.venv\Scripts\activate.bat
-python run.py
+> **Missing system tools?** Use `winget`:
+> ```powershell
+> winget install -e --id Python.Python.3.12
+> winget install -e --id OpenJS.NodeJS.LTS
+> winget install -e --id Gyan.FFmpeg
+> winget install -e --id UB-Mannheim.TesseractOCR
+> winget install -e --id Git.Git
+> ```
+> Or run `.\install.bat --auto-tools` to attempt it for you. Close and reopen the terminal after installing system tools.
+
+### What you get
+
+- Backend (FastAPI + Uvicorn) on http://127.0.0.1:8000
+- Frontend (Next.js dev server) on http://localhost:3000 (auto-opens in your browser)
+- If those ports are busy, the launcher picks the next free ones and prints them.
+
+### Useful flags
+
+The `start` and `install` commands forward flags to the underlying Python scripts.
+
+**Launching:**
+
+| Flag | What it does |
+|---|---|
+| `--backend-only` | Only the FastAPI server |
+| `--frontend-only` | Only the Next.js dev server |
+| `--no-browser` | Don't auto-open the browser |
+| `--no-install` | Skip the auto-bootstrap on first run |
+
+**Installing:**
+
+| Flag | What it does |
+|---|---|
+| `--force` | Reinstall everything (ignores the cache) |
+| `--auto-tools` | Auto-install missing system tools via `brew` / `winget` / `apt` |
+| `--clean` | Remove `backend/.venv`, `frontend/node_modules`, `frontend/.next`, and the install cache |
+| `--no-prompt` | Don't interactively ask for `GEMINI_API_KEY` |
+
+Examples:
+
+```bash
+./start.sh --backend-only          # macOS / Linux
+.\start.bat --no-browser           # Windows
+./install.sh --clean && ./install.sh   # nuke and rebuild everything
 ```
 
-Open `http://127.0.0.1:8000` in your browser.
+> If the wrapper scripts don't work for some reason, the underlying Python entry points still do:
+> `python3 install.py` and `python3 start.py` (use `python` instead of `python3` on Windows).
 
-## How To Use
+## Architecture
 
-1. Open the app in your browser.
-2. Paste a YouTube lecture URL or upload a local video file.
-3. Wait for the lecture to finish processing.
-4. Use the generated lecture workspace to:
-   - ask questions in Q&A
-   - generate a summary
-   - generate detailed notes
-   - create flashcards
-   - generate a quiz
-5. Reopen saved lectures from the Library Dashboard.
-6. Download summary or notes as PDF when needed.
+```
+CognifyAI/
+├── backend/                 # Python FastAPI — AI/core processing service
+│   ├── app/
+│   │   ├── api/             # REST API routes
+│   │   ├── core/            # AI engines (QA, quiz, summary, flashcards, coaching)
+│   │   ├── services/        # LLM client, transcription, OCR, TTS
+│   │   ├── utils/           # Storage, media, PDF generation
+│   │   └── config/          # Settings and environment
+│   ├── run.py               # Uvicorn entry point
+│   ├── requirements.txt
+│   └── .env.example         # Copied to backend/.env by the installer
+├── frontend/                # Next.js + TypeScript — UI
+│   ├── app/                 # App Router pages (qa, quiz, flashcards, ...)
+│   ├── components/          # Shared React components
+│   ├── lib/                 # API client, utilities
+│   └── public/              # Static assets (videos, scripts)
+├── install.py               # Cross-platform installer (all logic)
+├── start.py                 # Cross-platform launcher (all logic)
+├── install.sh / install.bat # Thin one-command install wrappers per OS
+├── start.sh   / start.bat   # Thin one-command launch wrappers per OS
+├── LICENSE
+└── README.md
+```
 
-## Notes
+## API endpoints
 
-- Local uploads support `mp4`, `mkv`, `avi`, and `mov`
-- Maximum upload size is `500 MB`
-- Generated files and study data are stored locally in `data/`
-- No separate database setup is required
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/lectures/process` | Process a YouTube URL or uploaded video |
+| GET | `/api/lectures` | Library dashboard data |
+| DELETE | `/api/lectures/{id}` | Delete a lecture |
+| GET | `/api/qa` | QA page info |
+| POST | `/api/qa` | Ask a question (non-streaming) |
+| POST | `/api/qa/stream` | Ask a question (SSE streaming) |
+| GET | `/api/summary` | Generate/get summary |
+| GET | `/api/notes` | Generate/get notes |
+| GET | `/api/download/{type}` | Download PDF |
+| GET | `/api/quiz` | Get quiz questions |
+| POST | `/api/quiz/submit` | Submit quiz answers |
+| POST | `/api/quiz/regenerate` | Regenerate quiz |
+| GET | `/api/flashcards` | Get flashcard data |
+| POST | `/api/flashcards/review` | Review a flashcard |
+| POST | `/api/flashcards/regenerate` | Regenerate flashcard deck |
+
+## Environment variables
+
+All env vars live in `backend/.env`. Only `GEMINI_API_KEY` is required — the installer prompts for it on first run.
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Google Gemini API key (required) |
+| `GEMINI_MODEL_NAME` | Gemini model — `gemini-2.5-flash` (default) or `gemini-2.5-flash-lite` |
+| `SPEECHMATICS_API_KEY` | Speechmatics API key (audio transcription fallback) |
+| `SPEECHMATICS_TTS_API_KEY` | Speechmatics TTS key (falls back to `SPEECHMATICS_API_KEY`) |
+| `NEXT_PUBLIC_API_URL` | Backend API URL (default: `http://127.0.0.1:8000/api`) |
+| `BACKEND_PORT` / `FRONTEND_PORT` | Override default ports (`8000` / `3000`) |
+
+## Tech stack
+
+- **Backend** — FastAPI, Uvicorn, Google Gemini, Sentence-Transformers, hybrid retrieval (BM25 + cosine), ReportLab (PDF), Tesseract (OCR), Speechmatics (ASR + TTS)
+- **Frontend** — Next.js 16 (App Router), React 19, TypeScript
 
 ## Troubleshooting
 
-- If `ffmpeg` or `tesseract` is not found, reinstall it and open a new terminal window
-- If `winget` is unavailable on Windows, install FFmpeg and Tesseract manually and add them to `PATH`
-- If YouTube download fails with a format or runtime error, install `Node.js` or `Deno` and try again
-- If the app says an API key is missing, check the `.env` file and restart the server
+- **Wrapper says Python is missing** — install Python 3.10+ from your package manager (see [Quick start](#quick-start)) or https://www.python.org/downloads, then reopen your terminal.
+- **Port 3000 or 8000 already in use** — the launcher picks the next free port automatically and prints it. To force specific ports, set `BACKEND_PORT` / `FRONTEND_PORT` before running `start`.
+- **`GEMINI_API_KEY` warning at startup** — open `backend/.env`, paste your key from https://aistudio.google.com/app/apikey, and restart.
+- **First install is slow** — that's mostly `torch` and `sentence-transformers` (~700 MB). Subsequent installs are skipped via SHA-256 caching of `requirements.txt` / `package-lock.json`.
+- **Need a clean slate** — `./install.sh --clean` on macOS/Linux or `.\install.bat --clean` on Windows, then re-run the installer.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
